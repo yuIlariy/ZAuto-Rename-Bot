@@ -59,7 +59,7 @@ logging.getLogger("pyrofork").setLevel(logging.WARNING)
 class DigitalAutoRenameBot(Client):
     def __init__(self):
         super().__init__(
-            name="DigitalRenameBot",
+            name="ADigitalRenameBot",
             api_id=Config.API_ID,
             api_hash=Config.API_HASH,
             bot_token=Config.BOT_TOKEN,
