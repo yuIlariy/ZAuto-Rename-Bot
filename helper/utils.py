@@ -103,7 +103,7 @@ def convert(seconds):
 
 async def send_log(b, u):
     if Config.LOG_CHANNEL:
-        curr = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        curr = datetime.datetime.now(pytz.timezone("Africa/Nairobi"))
         log_message = (
             "**--Nᴇᴡ Uꜱᴇʀ Sᴛᴀʀᴛᴇᴅ Tʜᴇ Bᴏᴛ--**\n\n"
             f"Uꜱᴇʀ: {u.mention}\n"
