@@ -34,22 +34,22 @@ id_pattern = re.compile(r'^.\d+$')
 
 class Config(object):
     # digital_botz client config
-    API_ID = os.environ.get("API_ID", "")
-    API_HASH = os.environ.get("API_HASH", "")
-    BOT_TOKEN = os.environ.get("BOT_TOKEN", "") 
+    API_ID = os.environ.get("API_ID", "rdl")
+    API_HASH = os.environ.get("API_HASH", "rdl")
+    BOT_TOKEN = os.environ.get("BOT_TOKEN", "rdl") 
     BOT = None
 
     # premium account string session required 😢 
-    STRING_SESSION = os.environ.get("STRING_SESSION", "")
+    STRING_SESSION = os.environ.get("STRING_SESSION", "rdl")
     
     # database config
-    DB_NAME = os.environ.get("DB_NAME","Digital_Auto_Rename_Bot")     
-    DB_URL = os.environ.get("DB_URL","")
+    DB_NAME = os.environ.get("DB_NAME","DiAuto")     
+    DB_URL = os.environ.get("DB_URL","rdl")
  
     # other configs
-    RKN_PIC = os.environ.get("RKN_PIC", "https://telegra.ph/file/b746aadfe59959eb76f59.jpg")
-    ADMIN = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '6705898491').split()]
-    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1002123429361"))
+    RKN_PIC = os.environ.get("RKN_PIC", "https://i.ibb.co/fzgHjXQn/1752254564132.png")
+    ADMIN = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '6318135266').split()]
+    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1001925329161"))
 
     # free upload limit 
     FREE_UPLOAD_LIMIT = 6442450944 # calculation 6*1024*1024*1024=results
@@ -62,32 +62,44 @@ class Config(object):
     try:
         FORCE_SUB = int(os.environ.get("FORCE_SUB", "")) 
     except:
-        FORCE_SUB = os.environ.get("FORCE_SUB", "Digital_Botz")
+        FORCE_SUB = os.environ.get("FORCE_SUB", "OtherBs")
         
     # wes response configuration     
-    PORT = int(os.environ.get("PORT", "8080"))
+    PORT = int(os.environ.get("PORT", "8720"))
     BOT_UPTIME = time.time()
 
 class rkn(object):
     # part of text configuration
-    START_TXT = """<b>Ｈ𝙰𝙸, {}👋
+    START_TXT = """👋 <b>Hello, {}!</b>
 
-𝚃ʜɪs 𝙸s 𝙰ɴ 𝙰ᴅᴠᴀᴄᴇᴅ 𝙰ɴᴅ 𝚈ᴇᴛ 𝙿ᴏᴡᴇʀғᴜʟ 𝚁ᴇɴᴀᴍᴇ 𝙱ᴏᴛ
-𝚄sɪɴɢ 𝚃ʜɪs 𝙱ᴏᴛ 𝚈ᴏᴜ 𝙲ᴀɴ 𝚁ᴇɴᴀᴍᴇ & 𝙲ʜᴀɴɢᴇ 𝚃ʜᴜᴍʙɴᴀɪʟ 𝙾ғ 𝚈ᴏᴜʀ 𝙵ɪʟᴇ 
-𝚈ᴏᴜ 𝙲ᴀɴ 𝙰ʟsᴏ 𝙲ᴏɴᴠᴇʀᴛ 𝚅ɪᴅᴇᴏ 𝚃ᴏ 𝙵ɪʟᴇ & 𝙵ɪʟᴇ 𝚃ᴏ 𝚅ɪᴅᴇᴏ
-𝚃𝙷𝙸𝚂 𝙱𝙾𝚃 𝙰𝙻𝚂𝙾 𝚂𝚄𝙿𝙿𝙾𝚁𝚃𝚂 𝙲𝚄𝚂𝚃𝙾𝙼 𝚃𝙷𝚄𝙼𝙱𝙽𝙰𝙸𝙻 𝙰𝙽𝙳 𝙲𝚄𝚂𝚃𝙾𝙼 𝙲𝙰𝙿𝚃𝙸𝙾𝙽
+<b>Welcome to the Fast and simple file renaming Bot.</b>
 
-Tʜɪs Bᴏᴛ Wᴀs Cʀᴇᴀᴛᴇᴅ Bʏ : @Digital_Botz 💞</b>"""
+Send a file to get started.
 
-    ABOUT_TXT = """<b>╭───────────⍟
-├🤖 ᴍy ɴᴀᴍᴇ : {}
-├🖥️ Dᴇᴠᴇʟᴏᴩᴇʀꜱ : {}
-├👨‍💻 Pʀᴏɢʀᴀᴍᴇʀ : {}
-├📕 Lɪʙʀᴀʀy : {}
-├✏️ Lᴀɴɢᴜᴀɢᴇ: {}
-├💾 Dᴀᴛᴀ Bᴀꜱᴇ: {}
-├📊 ᴠᴇʀsɪᴏɴ: <a href=https://github.com/DigitalBotz/Digital-Auto-Rename-Bot>{}</a></b>     
-╰───────────────⍟ """
+🛠 <b>Key features:</b>
+• Quick Rename files  
+• Custom captions  
+• Convert videos & documents  
+• Customize thumbnails  
+• Modify metadata  
+
+🌟 <i>Lightning-fast with premium enchantments!</i>
+
+🛸 <i>Powered By</i> <a href="https://t.me/xspes">NAm</a> <b>|</b> 🪄 <i>Spell Weaver</i>"""
+
+    ABOUT_TXT = """🪄 <b>BOT PROFILE</b> 🔮
+
+├ 🎯 <b>Name:</b> {}
+├ 🛠️ <b>Developers:</b> {}
+├ 💻 <b>Programer:</b> {}
+├ 📦 <b>Library:</b> {}
+├ 🐍 <b>Language:</b> {}
+├ 🗃️ <b>Data Base:</b> {}
+├ ☁️ <b>Server:</b> <a href='https://deluxhost.net//'>DeluxHost</a>
+├ 👨‍💻 <b>Wizard:</b> <a href='https://t.me/xspes'>NAm</a>
+└ 🆕 <b>Version:</b> <a href='https://github.com/yuIlariy/Digital-Auto-Rename-Bot'>{}</a>
+
+✨ <i>Where files transform with magical precision!</i>"""
 
     HELP_TXT = """
 <b>•></b> /start Tʜᴇ Bᴏᴛ.
@@ -129,15 +141,15 @@ Exᴀᴍᴩʟᴇ:- `/set_caption 📕 Fɪʟᴇ Nᴀᴍᴇ: {filename}
     LIVE_STATUS = """
 ⚡ ʟɪᴠᴇ sᴇʀᴠᴇʀ sᴛᴀᴛᴜs ⚡
 
-ᴜᴘᴛɪᴍᴇ: `{}`
-ᴄᴘᴜ: `{}%`
-ʀᴀᴍ: `{}%` 
-ᴛᴏᴛᴀʟ ᴅɪsᴋ: `{}`
-ᴜsᴇᴅ sᴘᴀᴄᴇ: `{} {}%`
-ғʀᴇᴇ sᴘᴀᴄᴇ: `{}`
-ᴜᴘʟᴏᴀᴅ: `{}`
-ᴅᴏᴡɴʟᴏᴀᴅ: `{}`
-V𝟹.𝟶.𝟶 [STABLE]
+⏰ ᴜᴘᴛɪᴍᴇ: `{}`
+🔥 ᴄᴘᴜ: `{}%`
+📊 ʀᴀᴍ: `{}%` 
+💾 ᴛᴏᴛᴀʟ ᴅɪsᴋ: `{}`
+📉 ᴜsᴇᴅ sᴘᴀᴄᴇ: `{} {}%`
+📁 ғʀᴇᴇ sᴘᴀᴄᴇ: `{}`
+📤 ᴜᴘʟᴏᴀᴅ: `{}`
+📥 ᴅᴏᴡɴʟᴏᴀᴅ: `{}`
+🧩 V𝟹.𝟷.𝟶 [STABLE]
 """
     
     
@@ -156,14 +168,20 @@ V𝟹.𝟶.𝟶 [STABLE]
     
     
     RKN_PROGRESS = """<b>
-╭━━━━━━━━◉🚀◉━━━━━━━━╮
-┃   𝗥𝗞𝗡 𝗣𝗥𝗢𝗖𝗘𝗦𝗦𝗜𝗡𝗚...❱━➣  
-┣━━━━━━━━━━━━━━━━━━━━╯
-┣⪼ 📦 𝗦𝗜𝗭𝗘: {1} | {2}
-┣⪼ 📊 𝗗𝗢𝗡𝗘: {0}%
-┣⪼ 🚀 𝗦𝗣𝗘𝗘𝗗: {3}/s
-┣⪼ ⏰ 𝗘𝗧𝗔: {4}
-╰━━━━━━━━◉🔥◉━━━━━━━━╯</b>"""
+╭━━━━❰ᴘʀᴏɢʀᴇss ʙᴀʀ❱━➣
+
+┃    🗂️ ᴄᴏᴍᴘʟᴇᴛᴇᴅ: {1}
+
+┃    📦 ᴛᴏᴛᴀʟ ꜱɪᴢᴇ: {2}
+
+┃    🔋 ꜱᴛᴀᴛᴜꜱ: {0}%
+
+┃    {3} ꜱᴘᴇᴇᴅ: {5}/s
+
+┃    ⏰ ᴇᴛᴀ: {4}
+
+╰━━━━━━━━━━━━━━━━➣
+</b>"""
 
 # Rkn Developer 
 # Don't Remove Credit 😔
