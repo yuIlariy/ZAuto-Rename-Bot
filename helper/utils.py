@@ -53,13 +53,45 @@ async def progress_for_pyrogram(current, total, ud_type, message, start):
         progress = "{0}{1}".format(
             ''.join(["▣" for i in range(math.floor(percentage / 5))]),
             ''.join(["▢" for i in range(20 - math.floor(percentage / 5))])
-        )            
-        tmp = progress + rkn.RKN_PROGRESS.format( 
-            round(percentage, 2),
-            humanbytes(current),
-            humanbytes(total),
-            humanbytes(speed),            
-            estimated_total_time if estimated_total_time != '' else "0 s"
+        )
+        
+        # --- Dynamic Speed Icon Logic ---
+        # Convert bytes/sec to MB/s for comparison
+        speed_in_mb = speed / (1024 * 1024)
+        
+        if speed_in_mb < 6:
+            speed_icon = "🐢"
+        elif speed_in_mb < 10:
+            speed_icon = "🚀"
+        else:
+            speed_icon = "🛸"
+        # --------------------------------
+
+        # --- Integrated Template (Ignores config.py) ---
+        RKN_PROGRESS_TEMPLATE = """<b>
+╭━━━━❰ᴘʀᴏɢʀᴇss ʙᴀʀ❱━➣
+
+┃    🗂️ ᴄᴏᴍᴘʟᴇᴛᴇᴅ: {1}
+
+┃    📦 ᴛᴏᴛᴀʟ ꜱɪᴢᴇ: {2}
+
+┃    🔋 ꜱᴛᴀᴛᴜꜱ: {0}%
+
+┃    {3} ꜱᴘᴇᴇᴅ: {5}
+
+┃    ⏰ ᴇᴛᴀ: {4}
+
+╰━━━━━━━━━━━━━━━━➣
+</b>"""
+        # -----------------------------------------------
+
+        tmp = progress + RKN_PROGRESS_TEMPLATE.format( 
+            round(percentage, 2),        # {0} Status %
+            humanbytes(current),         # {1} Completed
+            humanbytes(total),           # {2} Total Size
+            speed_icon,                  # {3} Dynamic Icon
+            estimated_total_time if estimated_total_time != '' else "0 s", # {4} ETA
+            humanbytes(speed)            # {5} Speed Value
         )
         try:
             await message.edit(
@@ -195,11 +227,3 @@ async def metadata_text(metadata_text):
             subtitle_title = f[len("change-subtitle-title"):].strip()
 
     return author, title, video_title, audio_title, subtitle_title
-
-# (c) @RknDeveloperr
-# Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
-# Special Thanks To @ReshamOwner
-# Update Channel @Digital_Botz & @DigitalBotz_Support
