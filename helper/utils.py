@@ -61,7 +61,7 @@ async def progress_for_pyrogram(current, total, ud_type, message, start):
         
         if speed_in_mb < 6:
             speed_icon = "🐢"
-        elif speed_in_mb < 10:
+        elif speed_in_mb < 11:
             speed_icon = "🚀"
         else:
             speed_icon = "🛸"
