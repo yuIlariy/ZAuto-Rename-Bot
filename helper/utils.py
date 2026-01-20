@@ -137,13 +137,13 @@ async def send_log(b, u):
     if Config.LOG_CHANNEL:
         curr = datetime.datetime.now(pytz.timezone("Africa/Nairobi"))
         log_message = (
-            "**--Nᴇᴡ Uꜱᴇʀ Sᴛᴀʀᴛᴇᴅ Tʜᴇ Bᴏᴛ--**\n\n"
-            f"Uꜱᴇʀ: {u.mention}\n"
-            f"Iᴅ: `{u.id}`\n"
-            f"Uɴ: @{u.username}\n\n"
-            f"Dᴀᴛᴇ: {curr.strftime('%d %B, %Y')}\n"
-            f"Tɪᴍᴇ: {curr.strftime('%I:%M:%S %p')}\n\n"
-            f"By: {b.mention}"
+            "**🚀--Nᴇᴡ Uꜱᴇʀ Sᴛᴀʀᴛᴇᴅ Tʜᴇ Bᴏᴛ--**\n\n"
+            f"📜Uꜱᴇʀ: {u.mention}\n"
+            f"🆔Iᴅ: `{u.id}`\n"
+            f"👤Uɴ: @{u.username}\n\n"
+            f"🗓️Dᴀᴛᴇ: {curr.strftime('%d %B, %Y')}\n"
+            f"⏰Tɪᴍᴇ: {curr.strftime('%I:%M:%S %p')}\n\n"
+            f"🚀Started: {b.mention}"
         )
         await b.send_message(Config.LOG_CHANNEL, log_message)
 
