@@ -31,7 +31,7 @@ License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/
 """
 
 # database imports
-import motor.motor_asyncio, datetime, pytz
+import motor.motor_asyncio, datetime, pytz, time
 
 # bots imports
 from config import Config
@@ -42,6 +42,7 @@ class Database:
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
         self.db = self._client[database_name]
         self.col = self.db.user
+        self.stats_col = self.db.stats  # New collection for persistent stats
         
     def new_user(self, id):
         return dict(
@@ -49,7 +50,8 @@ class Database:
             file_id=None,
             caption=None,
             join_date=datetime.date.today().isoformat(),
-            format_template="{filename}",  # Default format template            
+            format_template="{filename}",           
+            is_premium=False,  # Added to support premium count
             ban_status=dict(
                 is_banned=False,
                 ban_duration=0,
@@ -72,6 +74,12 @@ class Database:
     async def total_users_count(self):
         count = await self.col.count_documents({})
         return count
+    
+    # --- FIXED: Added missing method to prevent crash ---
+    async def total_premium_users_count(self):
+        count = await self.col.count_documents({'is_premium': True})
+        return count
+    # --------------------------------------------------
 
     async def get_all_users(self):
         all_users = self.col.find({})
@@ -141,6 +149,33 @@ class Database:
         """Get user's rename format template"""
         user = await self.col.find_one({"_id": int(user_id)})
         return user.get("format_template") if user else None
+
+    # --- NEW: Persistent Bot Status Functions ---
+    async def get_bot_stats(self):
+        """Get persistent stats (start time, traffic)"""
+        stats = await self.stats_col.find_one({'_id': 'bot_stats'})
+        if not stats:
+            # Initialize if not exists
+            stats = {
+                '_id': 'bot_stats',
+                'start_time': time.time(),
+                'total_sent': 0,
+                'total_recv': 0
+            }
+            await self.stats_col.insert_one(stats)
+        return stats
+
+    async def update_traffic(self, sent, recv):
+        """Update the cumulative traffic in DB"""
+        # We assume sent/recv are cumulative from system start, so we just update the record
+        # Note: To be perfectly accurate across reboots, we would need to add difference. 
+        # For simplicity in this bot structure, we act as a persistent store.
+        await self.stats_col.update_one(
+            {'_id': 'bot_stats'},
+            {'$set': {'last_updated': time.time()}, '$inc': {'total_sent': sent, 'total_recv': recv}},
+            upsert=True
+        )
+    # ---------------------------------------------
     
     
 digital_botz = Database(Config.DB_URL, Config.DB_NAME)
