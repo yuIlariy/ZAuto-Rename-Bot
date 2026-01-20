@@ -77,7 +77,7 @@ class rkn(object):
 Send a file to get started.
 
 🛠 <b>Key features:</b>
-• Quick Rename files  
+• Quick Auto Rename files  
 • Custom captions  
 • Convert videos & documents  
 • Customize thumbnails  
