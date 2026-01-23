@@ -45,15 +45,36 @@ logger.setLevel(logging.INFO)
 @Client.on_message(filters.command(["stats", "status"]) & filters.user(Config.ADMIN))
 async def get_stats(bot, message):
     total_users = await digital_botz.total_users_count()
-    if bot.premium:
-        total_premium_users = await digital_botz.total_premium_users_count()
-    else:
+    
+    # Calculate Uptime Manually to avoid 24h reset
+    now = time.time()
+    diff = int(now - bot.uptime)
+    days, remainder = divmod(diff, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    # Format the string dynamically
+    uptime = ""
+    if days > 0:
+        uptime += f"{days}d "
+    if hours > 0 or days > 0:
+        uptime += f"{hours}h "
+    uptime += f"{minutes}m {seconds}s"
+    
+    # Check for premium users (handles if bot is not premium)
+    try:
+        if getattr(bot, 'premium', False): # Safely check if 'premium' attr exists
+            total_premium_users = await digital_botz.total_premium_users_count()
+        else:
+            total_premium_users = "Disabled ✅"
+    except:
         total_premium_users = "Disabled ✅"
-    uptime = time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - bot.uptime))    
+
     start_t = time.time()
     rkn = await message.reply('**ᴘʀᴏᴄᴇssɪɴɢ.....**')    
     end_t = time.time()
     time_taken_s = (end_t - start_t) * 1000
+    
     await rkn.edit(text=f"**--Bᴏᴛ Sᴛᴀᴛᴜꜱ--** \n\n**⌚️ Bᴏᴛ Uᴩᴛɪᴍᴇ:** {uptime} \n**🐌 Cᴜʀʀᴇɴᴛ Pɪɴɢ:** `{time_taken_s:.3f} ᴍꜱ` \n**👭 Tᴏᴛᴀʟ Uꜱᴇʀꜱ:** `{total_users}`\n**💸 ᴛᴏᴛᴀʟ ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs:** `{total_premium_users}`")
 
 # bot logs process 
