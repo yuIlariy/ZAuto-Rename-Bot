@@ -59,14 +59,53 @@ async def rename_start(client, message):
     mime_type = rkn_file.mime_type
     dcid = FileId.decode(rkn_file.file_id).dc_id
     extension_type = mime_type.split('/')[0]
+
+    # --- EMOJI LOGIC ---
+    file_ext = filename.split('.')[-1].lower() if "." in filename else "unknown"
+
+    FILE_TYPE_EMOJIS = {
+        "audio": "🎵",
+        "video": "🎬",
+        "image": "🖼️",
+        "application": "📦",
+        "text": "📄",
+        "font": "🔤",
+        "message": "💬",
+        "multipart": "🧩",
+        "default": "📁"
+    }
+
+    EXTENSION_EMOJIS = {
+        "zip": "🗜️", "rar": "📚", "7z": "🧳", "tar": "🗂️", "gz": "🧪", "xz": "🧬",
+        "pdf": "📕", "apk": "🤖", "exe": "💻", "msi": "🛠️",
+        "doc": "📄", "docx": "📄", "ppt": "📊", "pptx": "📊",
+        "xls": "📈", "xlsx": "📈", "csv": "📑", "txt": "📝",
+        "json": "🧾", "xml": "🧬", "html": "🌐",
+        "py": "🐍", "js": "📜", "ts": "📜", "java": "☕", "c": "🔧", "cpp": "🔩",
+        "mp3": "🎶", "wav": "🔊", "flac": "🎼",
+        "mp4": "🎥", "mkv": "📽️", "mov": "🎞️", "webm": "🌐",
+        "jpg": "🖼️", "jpeg": "🖼️", "png": "🖼️", "gif": "🌀", "svg": "📐",
+        "ttf": "🔤", "otf": "🔤", "woff": "🔤", "eot": "🔤"
+    }
+
+    # Determine the correct emoji
+    emoji = EXTENSION_EMOJIS.get(file_ext) or FILE_TYPE_EMOJIS.get(extension_type, FILE_TYPE_EMOJIS["default"])
+    # -------------------
     
     button = [[InlineKeyboardButton("📁 Dᴏᴄᴜᴍᴇɴᴛ",callback_data = "upload#document")]]
     if message.media in [MessageMediaType.VIDEO, MessageMediaType.DOCUMENT]:
         button.append([InlineKeyboardButton("🎥 Vɪᴅᴇᴏ", callback_data = "upload#video")])
     elif message.media == MessageMediaType.AUDIO:
         button.append([InlineKeyboardButton("🎵 Aᴜᴅɪᴏ", callback_data = "upload#audio")])
+    
+    # Updated text with emojis for all fields
     await message.reply(
-            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n\n**__ᴍᴇᴅɪᴀ ɪɴꜰᴏ:\n\n◈ ᴏʟᴅ ꜰɪʟᴇ ɴᴀᴍᴇ: `{filename}`\n\n◈ ᴇxᴛᴇɴꜱɪᴏɴ: `{extension_type.upper()}`\n◈ ꜰɪʟᴇ ꜱɪᴢᴇ: `{filesize}`\n◈ ᴍɪᴍᴇ ᴛʏᴇᴩ: `{mime_type}`\n◈ ᴅᴄ ɪᴅ: `{dcid}`....__**",        
+            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n\n**__{emoji} ᴍᴇᴅɪᴀ ɪɴꜰᴏ:\n\n"
+                 f"🗃️ ᴏʟᴅ ꜰɪʟᴇ ɴᴀᴍᴇ: `{filename}`\n\n"
+                 f"🏷️ ᴇxᴛᴇɴꜱɪᴏɴ: `{extension_type.upper()}`\n"
+                 f"💾 ꜰɪʟᴇ ꜱɪᴢᴇ: `{filesize}`\n"
+                 f"🧬 ᴍɪᴍᴇ ᴛʏᴇᴩ: `{mime_type}`\n"
+                 f"🆔 ᴅᴄ ɪᴅ: `{dcid}`....__**",        
             reply_to_message_id=message.id,
             reply_markup=InlineKeyboardMarkup(button)
         )
