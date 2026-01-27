@@ -3,343 +3,223 @@
 # Don't Remove Credit 😔
 # Telegram Channel @RknDeveloper & @Rkn_Botz
 # Developer @RknDeveloperr
-# Special Thanks To @ReshamOwner
-# Update Channel @Digital_Botz & @DigitalBotz_Support
 """
 Apache License 2.0
 Copyright (c) 2025 @Digital_Botz
 """
 
-# pyrogram imports
-from pyrogram import Client, filters
-from pyrogram.enums import MessageMediaType
-from pyrogram.errors import FloodWait
-from pyrogram.file_id import FileId
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
-
-# hachoir imports
-from hachoir.metadata import extractMetadata
-from hachoir.parser import createParser
-from PIL import Image
-
-# bots imports
-from helper.utils import progress_for_pyrogram, convert, humanbytes, add_prefix_suffix, remove_path
-from helper.database import digital_botz
-from config import Config
-from plugins.auto_rename import EnhancedAutoRenamer
-
-# extra imports
-from asyncio import sleep
-import os, time, asyncio
 import re
+import os
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime
+import asyncio
+from helper.database import digital_botz
 
-UPLOAD_TEXT = """Uploading Started...."""
-DOWNLOAD_TEXT = """Download Started..."""
+class EnhancedAutoRenamer:
+    def __init__(self):
+        self.renaming_operations = {} 
+        
+    def extract_all_info(self, filename: str) -> Dict:
+        """Extract all possible information from filename"""
+        info = {
+            'title': '',
+            'year': '',
+            'season': '',
+            'episode': '',
+            'quality': '',
+            'source': '',
+            'video_codec': '',
+            'audio_codec': '',
+            'language': '',
+            'bit_depth': '',
+            'hdr': '',
+            'release_group': '',
+            'original_name': Path(filename).stem,
+            'extension': Path(filename).suffix.lstrip('.')
+        }
+        
+        # Clean filename for parsing
+        clean_name = filename.replace('_', ' ').replace('.', ' ')
+        
+        # 1. Year extraction
+        year_match = re.search(r'[\(\[]?(\d{4})[\)\]]?', clean_name)
+        if year_match:
+            year_val = int(year_match.group(1))
+            if 1900 < year_val < 2100:
+                info['year'] = str(year_val)
+        
+        # 2. Season and Episode extraction
+        
+        # Pattern 1: Strict (S01E01, S1E1)
+        s_e_match = re.search(r'[Ss](\d{1,2})\s*[EePp]?(\d{1,4})', clean_name)
+        if s_e_match:
+            info['season'] = f"S{s_e_match.group(1).zfill(2)}"
+            info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
+        
+        # Pattern 2: Verbose (Season 1 Episode 1)
+        if not info['season']:
+            season_match = re.search(r'[Ss]eason\s*(\d{1,2})', clean_name, re.IGNORECASE)
+            episode_match = re.search(r'[Ee]pisode\s*(\d{1,4})', clean_name, re.IGNORECASE)
+            if season_match:
+                info['season'] = f"S{season_match.group(1).zfill(2)}"
+            if episode_match:
+                info['episode'] = f"E{episode_match.group(1).zfill(2)}"
 
-app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH, session_string=Config.STRING_SESSION)
+        # Pattern 3: Loose Sequence (Show - 01, Show Ep 01, [01])
+        if not info['episode']:
+            # Look for hyphens or "Ep" followed by number
+            loose_match = re.search(r'(?:\s-|Ep|E|Episode|^)\s*(\d{1,4})(?=\s|$|\.)', clean_name, re.IGNORECASE)
+            # Look for brackets
+            bracket_match = re.search(r'[\[\(]\s*(\d{1,4})\s*[\]\)]', clean_name)
 
-renamer = EnhancedAutoRenamer()
+            found_ep = None
+            if loose_match:
+                found_ep = loose_match.group(1)
+            elif bracket_match:
+                found_ep = bracket_match.group(1)
+            
+            # Validation: Ensure number found isn't the Year
+            if found_ep and found_ep != info['year']:
+                info['episode'] = f"E{found_ep.zfill(2)}"
 
-# --- QUEUE VARIABLES ---
-# Structure: { user_id: [message1, message2, ...] }
-USER_QUEUE = {}
-# Structure: { user_id: True/False }
-IS_RUNNING = {}
-# -----------------------
+        # 3. Title extraction
+        title_match = re.search(r'^([A-Za-z0-9\s\.\-\']+?)(?=\s*[\(\[]?\d{4}[\)\]]?|\s*S\d|\s*E\d|\s*\-\s*\d)', filename.replace('.', ' ').replace('_', ' '), re.IGNORECASE)
+        if title_match:
+            info['title'] = self._clean_title(title_match.group(1))
+        else:
+            info['title'] = self._clean_title(info['original_name'])
+        
+        # 4. Quality extraction
+        quality_match = re.search(r'(\d{3,4}p|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
+        if quality_match:
+            info['quality'] = quality_match.group(1).upper()
+        
+        # 5. Video codec
+        codec_match = re.search(r'(x264|x265|HEVC|H\.264|H\.265|AVC)', clean_name, re.IGNORECASE)
+        if codec_match:
+            info['video_codec'] = codec_match.group(1).lower()
+        
+        # 6. Audio codec
+        audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS)', clean_name, re.IGNORECASE)
+        if audio_match:
+            info['audio_codec'] = audio_match.group(1).upper()
+        
+        # 7. Language detection
+        languages = ['Hindi', 'English', 'Malayalam', 'Tamil', 'Telugu', 'Kannada', 'Dual', 'Multi']
+        for lang in languages:
+            if re.search(lang, clean_name, re.IGNORECASE):
+                info['language'] = lang
+                break
+        
+        # 8. Source type
+        sources = ['BluRay', 'WEBRip', 'WEB-DL', 'HDRip', 'DVDRip', 'TVRip', 'AMZN', 'Netflix', 'Hotstar']
+        for source in sources:
+            if re.search(source, clean_name, re.IGNORECASE):
+                info['source'] = source
+                break
+        
+        # 9. Bit depth and HDR
+        if '10bit' in clean_name.lower():
+            info['bit_depth'] = '10bit'
+        if 'hdr' in clean_name.lower():
+            info['hdr'] = 'HDR'
+        
+        return info
+    
+    def _clean_title(self, title: str) -> str:
+        """Clean and format title"""
+        title = re.sub(r'[@#~\[\]\{\}\(\)]', '', title)
+        title = re.sub(r'\s+', ' ', title)
+        return title.strip().title()
+    
+    def apply_format_template(self, info: Dict, template: str) -> str:
+        """Apply user's format template to extracted info"""
+        placeholders = {
+            '{title}': info.get('title', ''),
+            '{year}': info.get('year', ''),
+            '{season}': info.get('season', ''),
+            '{episode}': info.get('episode', ''),
+            '{quality}': info.get('quality', ''),
+            '{source}': info.get('source', ''),
+            '{video_codec}': info.get('video_codec', ''),
+            '{audio_codec}': info.get('audio_codec', ''),
+            '{language}': info.get('language', ''),
+            '{bit_depth}': info.get('bit_depth', ''),
+            '{hdr}': info.get('hdr', ''),
+            '{original}': info.get('original_name', ''),
+            '{filename}': info.get('original_name', ''),
+            '{ext}': info.get('extension', '')
+        }
+        
+        for placeholder, value in placeholders.items():
+            template = template.replace(placeholder, value)
+        
+        template = re.sub(r'\(\s*\)', '', template)
+        template = re.sub(r'\[\s*\]', '', template)
+        template = re.sub(r'\s+', ' ', template)
+        template = template.strip()
+        
+        return template
 
-@Client.on_message(filters.private & (filters.audio | filters.document | filters.video))
-async def rename_start(client, message):
+@Client.on_message(filters.command(["autorename", "setformat"]))
+async def set_format_command(client: Client, message: Message):
+    """Set auto rename format template"""
     user_id = message.from_user.id
-
-    # 1. Add to Queue
-    if user_id not in USER_QUEUE:
-        USER_QUEUE[user_id] = []
     
-    USER_QUEUE[user_id].append(message)
-    
-    # 2. Check if already running
-    if user_id in IS_RUNNING and IS_RUNNING[user_id]:
+    if len(message.command) < 2:
+        current_format = await digital_botz.get_format_template(user_id)
+        reply_text = f"📝 **Your Current Format:**\n`{current_format}`\n\n" if current_format else "❌ No format set yet!\n\n"
+        
+        reply_text += "**Available Placeholders:**\n"
+        placeholders = [
+            "`{filename}` - Original File Name.", 
+            "`{title}` - Movie/Series title",
+            "`{year}` - Release year",
+            "`{season}` - Season number (S01)",
+            "`{episode}` - Episode number (E01)",
+            "`{quality}` - Video quality (1080p, 4K)",
+            "`{source}` - Source type (BluRay, WEBRip)",
+            "`{video_codec}` - Video codec (x264, x265)",
+            "`{audio_codec}` - Audio codec (DD+5.1)",
+            "`{language}` - Language (Hindi, English)",
+            "`{bit_depth}` - Bit depth (10bit)",
+            "`{hdr}` - HDR info",
+            "`{ext}` - File extension"
+        ]
+        
+        reply_text += "\n".join(placeholders)
+        reply_text += "\n\n**Usage:** `/autorename {title} ({year}) {quality} {language}.{ext}`"
+        
+        buttons = [
+            [InlineKeyboardButton("🎬 Movie Format", callback_data="format_movie"), InlineKeyboardButton("📺 Series Format", callback_data="format_series")],
+            [InlineKeyboardButton("🎵 Music Format", callback_data="format_music"), InlineKeyboardButton("📄 Document Format", callback_data="format_doc")],
+            [InlineKeyboardButton("✍️ Custom Format", callback_data="format_custom")]
+        ]
+        
+        await message.reply_text(reply_text, reply_markup=InlineKeyboardMarkup(buttons))
         return
-
-    # 3. Start Worker
-    IS_RUNNING[user_id] = True
-    await process_queue(client, user_id)
-
-async def process_queue(client, user_id):
-    try:
-        while user_id in USER_QUEUE and USER_QUEUE[user_id]:
-            # --- IMPROVED SORTING LOGIC (Season + Episode) ---
-            def get_sort_key(msg):
-                try:
-                    # Get filename
-                    file_val = getattr(msg, msg.media.value)
-                    fname = file_val.file_name or ""
-                    
-                    # Use the Renamer logic to consistently parse Season/Episode
-                    info = renamer.extract_all_info(fname)
-                    
-                    # Parse Season (e.g., "S01" -> 1)
-                    season = 0
-                    if info.get('season'):
-                        season = int(info['season'].upper().replace("S", ""))
-                    
-                    # Parse Episode (e.g., "E05" -> 5)
-                    episode = 0
-                    if info.get('episode'):
-                        episode = int(info['episode'].upper().replace("E", ""))
-                        
-                    # Return tuple for sorting: (Season, Episode)
-                    return (season, episode)
-                except:
-                    # Fallback to end of queue if parsing fails
-                    return (999, 999)
-
-            # Sort the queue
-            USER_QUEUE[user_id].sort(key=get_sort_key)
-            # -------------------------------------------------
-
-            # Pop the first message
-            message = USER_QUEUE[user_id].pop(0)
-
-            # Process it
-            await process_file_logic(client, message)
-            
-            # Small delay between files
-            await asyncio.sleep(2)
-
-    except Exception as e:
-        print(f"Queue Error: {e}")
-    finally:
-        # Mark as finished
-        IS_RUNNING[user_id] = False
-        if user_id in USER_QUEUE:
-            del USER_QUEUE[user_id]
-
-async def process_file_logic(client, message):
-    """
-    The main renaming logic, moved here to be called sequentially.
-    """
-    try:
-        # 1. Check File Size for Non-Premium/Non-Session users
-        rkn_file = getattr(message, message.media.value)
-        if not Config.STRING_SESSION:
-            if rkn_file.file_size > 2000 * 1024 * 1024:
-                await message.reply_text("Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Iꜱ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ 2Gʙ+")
-                return
-
-        # 2. Gather File Info & Emojis
-        filename = rkn_file.file_name
-        if not filename:
-            filename = "unknown_file"
-            
-        if not "." in filename:
-            if "." in filename:
-                extn = filename.rsplit('.', 1)[-1]
-            else:
-                extn = "mkv"
-            filename = filename + "." + extn
-            
-        filesize = humanbytes(rkn_file.file_size)
-        mime_type = rkn_file.mime_type
-        dcid = FileId.decode(rkn_file.file_id).dc_id
-        extension_type = mime_type.split('/')[0]
-
-        # --- EMOJI LOGIC ---
-        file_ext = filename.split('.')[-1].lower() if "." in filename else "unknown"
-
-        FILE_TYPE_EMOJIS = {
-            "audio": "🎵", "video": "🎬", "image": "🖼️", "application": "📦",
-            "text": "📄", "font": "🔤", "message": "💬", "multipart": "🧩", "default": "📁"
-        }
-        EXTENSION_EMOJIS = {
-            "zip": "🗜️", "rar": "📚", "7z": "🧳", "tar": "🗂️", "gz": "🧪", "xz": "🧬",
-            "pdf": "📕", "apk": "🤖", "exe": "💻", "msi": "🛠️", "doc": "📄", "docx": "📄",
-            "ppt": "📊", "pptx": "📊", "xls": "📈", "xlsx": "📈", "csv": "📑", "txt": "📝",
-            "json": "🧾", "xml": "🧬", "html": "🌐", "py": "🐍", "js": "📜", "ts": "📜",
-            "java": "☕", "c": "🔧", "cpp": "🔩", "mp3": "🎶", "wav": "🔊", "flac": "🎼",
-            "mp4": "🎥", "mkv": "📽️", "mov": "🎞️", "webm": "🌐", "jpg": "🖼️", "jpeg": "🖼️",
-            "png": "🖼️", "gif": "🌀", "svg": "📐", "ttf": "🔤", "otf": "🔤", "woff": "🔤", "eot": "🔤"
-        }
-        emoji = EXTENSION_EMOJIS.get(file_ext) or FILE_TYPE_EMOJIS.get(extension_type, FILE_TYPE_EMOJIS["default"])
-        # -------------------
-
-        # 3. Send Initial Status Message
-        rkn_processing = await message.reply_text(
-            text=f"**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n\n"
-                 f"**__{emoji} Fɪʟᴇ Iɴꜰᴏ:__**\n"
-                 f"🗃️ Oʀɪɢɪɴᴀʟ: `{filename}`\n"
-                 f"💾 Sɪᴢᴇ: `{filesize}`\n"
-                 f"🧬 Tyᴩᴇ: `{mime_type}`\n\n"
-                 f"⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**"
-        )
-
-        user_id = message.from_user.id
-        
-        # 4. Generate New Filename
-        info = renamer.extract_all_info(filename)
-        user_data = await digital_botz.get_user_data(user_id)
-        format_template = user_data.get('format_template', None)
-        
-        if not format_template:
-            format_template = "{original}.{ext}"
-
-        new_name = renamer.apply_format_template(info, format_template)
-        
-        if not new_name.endswith(f".{info['extension']}"):
-            new_name += f".{info['extension']}"
-        
-        new_filename = new_name.replace("/", "_").replace("\\", "_")
-        
-        # 5. Create Directory & Paths
-        if not os.path.isdir("Renames"):
-            os.makedirs("Renames", exist_ok=True)
-            
-        file_path = f"Renames/{new_filename}"
-        
-        # 6. Download
-        await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
-        try:            
-            dl_path = await client.download_media(
-                message=message, 
-                file_name=file_path, 
-                progress=progress_for_pyrogram, 
-                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
-            )                    
-        except Exception as e:        
-            await rkn_processing.edit(f"⚠️ Download Error: {e}")
-            return
-        
-        # 7. Extract Duration
-        duration = 0
-        try:
-            parser = createParser(file_path)
-            metadata = extractMetadata(parser)
-            if metadata and metadata.has("duration"):
-                duration = metadata.get('duration').seconds
-            if parser:
-                parser.close()
-        except:
-            pass
-            
-        # 8. Handle Thumbnail & Caption
-        ph_path = None
-        c_caption = user_data.get('caption', None)
-        c_thumb = user_data.get('file_id', None)
-
-        if c_caption:
-            try:
-                caption = c_caption.format(filename=new_filename, filesize=filesize, duration=convert(duration))
-            except Exception as e:             
-                caption = f"**{new_filename}**"          
-        else:
-            caption = f"**{new_filename}**"
     
-        media_thumbs = getattr(rkn_file, 'thumbs', None)
-        if (media_thumbs or c_thumb):
-            try:
-                if c_thumb:
-                    ph_path = await client.download_media(c_thumb) 
-                else:
-                    ph_path = await client.download_media(media_thumbs[0].file_id)
-                
-                if ph_path and os.path.exists(ph_path):
-                    Image.open(ph_path).convert("RGB").save(ph_path)
-                    img = Image.open(ph_path)
-                    img.resize((320, 320))
-                    img.save(ph_path, "JPEG")
-            except Exception as e:
-                ph_path = None
+    format_template = " ".join(message.command[1:])
+    await digital_botz.add_user_format_template(user_id, format_template)
+    await message.reply_text(f"✅ Format set successfully!\n\n`{format_template}`")
 
-        # 9. Determine Upload Type
-        upload_type = "document"
-        if message.media == MessageMediaType.VIDEO:
-            upload_type = "video"
-        elif message.media == MessageMediaType.AUDIO:
-            upload_type = "audio"
-        
-        await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-        
-        # 10. Upload Logic
-        if rkn_file.file_size > 2000 * 1024 * 1024:
-            filw, error = await upload_files(
-                app, Config.LOG_CHANNEL, upload_type, file_path, 
-                ph_path, caption, duration, rkn_processing
-            )
-            if error:            
-                await remove_path(ph_path, file_path, dl_path)
-                await rkn_processing.edit(f"⚠️ Upload Error: {error}")
-                return
-            
-            from_chat = filw.chat.id
-            mg_id = filw.id
-            await asyncio.sleep(2)
-            await client.copy_message(message.from_user.id, from_chat, mg_id)     
-        else:
-            filw, error = await upload_files(
-                client, message.chat.id, upload_type, file_path, 
-                ph_path, caption, duration, rkn_processing
-            )
-            if error:            
-                await remove_path(ph_path, file_path, dl_path)
-                await rkn_processing.edit(f"⚠️ Upload Error: {error}")
-                return
-
-        # 11. Cleanup & Success
-        await remove_path(ph_path, file_path, dl_path)
-        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
-        await asyncio.sleep(2) 
-        await rkn_processing.delete()
-
-    except Exception as e:
-        # Fallback cleanup in case of crash
-        print(f"Error in process_file_logic: {e}")
-        try:
-            if 'ph_path' in locals(): await remove_path(ph_path)
-            if 'file_path' in locals(): await remove_path(file_path)
-            if 'dl_path' in locals(): await remove_path(dl_path)
-        except:
-            pass
-
-async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing):
-    """
-    Unified function to upload files based on type
-    """
-    try:
-        if not os.path.exists(file_path):
-            return None, f"File not found: {file_path}"
-            
-        if upload_type == "document":
-            filw = await bot.send_document(
-                sender_id,
-                document=file_path,
-                thumb=ph_path,
-                caption=caption,
-                progress=progress_for_pyrogram,
-                progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
-        
-        elif upload_type == "video":
-            filw = await bot.send_video(
-                sender_id,
-                video=file_path,
-                caption=caption,
-                thumb=ph_path,
-                duration=duration,
-                progress=progress_for_pyrogram,
-                progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
-        
-        elif upload_type == "audio":
-            filw = await bot.send_audio(
-                sender_id,
-                audio=file_path,
-                caption=caption,
-                thumb=ph_path,
-                duration=duration,
-                progress=progress_for_pyrogram,
-                progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
-        else:
-            return None, f"Unknown upload type: {upload_type}"
-        
-        return filw, None
-        
-    except Exception as e:
-        return None, str(e)
+@Client.on_callback_query(filters.regex(r"^format_"))
+async def format_callback(client, callback_query):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    
+    formats = {
+        "format_movie": "{title} ({year}) {quality} {source} {video_codec} {language}.{ext}",
+        "format_series": "{title} {season}{episode} {quality} {source} {video_codec}.{ext}",
+        "format_music": "{title} - {language} ({year}).{ext}",
+        "format_doc": "{title} ({quality}).{ext}",
+        "format_custom": "{title} {quality} {language}.{ext}"
+    }
+    
+    if data in formats:
+        await digital_botz.add_user_format_template(user_id, formats[data])
+        await callback_query.message.edit_text(f"✅ Format set to **{data.split('_')[1].title()}**!\n\n`{formats[data]}`")
+    await callback_query.answer()
