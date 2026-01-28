@@ -32,27 +32,22 @@ from plugins.auto_rename import EnhancedAutoRenamer
 from asyncio import sleep
 import os, time, asyncio
 
+
 UPLOAD_TEXT = """Uploading Started...."""
 DOWNLOAD_TEXT = """Download Started..."""
 
 app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH, session_string=Config.STRING_SESSION)
 
-renamer = EnhancedAutoRenamer()
 
 @Client.on_message(filters.private & (filters.audio | filters.document | filters.video))
 async def rename_start(client, message):
-    # 1. Check File Size for Non-Premium/Non-Session users
+    user_id  = message.from_user.id
     rkn_file = getattr(message, message.media.value)
     if not Config.STRING_SESSION:
         if rkn_file.file_size > 2000 * 1024 * 1024:
              return await message.reply_text("Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Iꜱ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ 2Gʙ+")
-
-    # 2. Gather File Info & Emojis
+   
     filename = rkn_file.file_name
-    # Default fallback for filename if missing
-    if not filename:
-        filename = "unknown_file"
-        
     if not "." in filename:
         if "." in filename:
             extn = filename.rsplit('.', 1)[-1]
@@ -93,152 +88,41 @@ async def rename_start(client, message):
         "ttf": "🔤", "otf": "🔤", "woff": "🔤", "eot": "🔤"
     }
 
+    # Determine the correct emoji
     emoji = EXTENSION_EMOJIS.get(file_ext) or FILE_TYPE_EMOJIS.get(extension_type, FILE_TYPE_EMOJIS["default"])
     # -------------------
-
-    # 3. Send Initial Status Message (Auto-Rename Triggered)
-    rkn_processing = await message.reply_text(
-        text=f"**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n\n"
-             f"**__{emoji} Fɪʟᴇ Iɴꜰᴏ:__**\n"
-             f"🗃️ Oʀɪɢɪɴᴀʟ: `{filename}`\n"
-             f"💾 Sɪᴢᴇ: `{filesize}`\n"
-             f"🧬 Tyᴩᴇ: `{mime_type}`\n\n"
-             f"⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**"
-    )
-
-    user_id = message.from_user.id
     
-    # 4. Generate New Filename
-    # Extract info from filename
-    info = renamer.extract_all_info(filename)
-
-    # Get user's format template (or default)
-    user_data = await digital_botz.get_user_data(user_id)
-    format_template = user_data.get('format_template', None)
-    
-    if not format_template:
-        format_template = "{original}.{ext}"
-
-    # Apply template
-    new_name = renamer.apply_format_template(info, format_template)
-    
-    # Ensure extension is correct
-    if not new_name.endswith(f".{info['extension']}"):
-        new_name += f".{info['extension']}"
-    
-    # Sanitize filename (Fix for 'No such file' errors)
-    new_filename = new_name.replace("/", "_").replace("\\", "_")
-    
-    # 5. Create Directory & Paths
-    if not os.path.isdir("Renames"):
-        os.makedirs("Renames", exist_ok=True)
-        
-    file_path = f"Renames/{new_filename}"
-    
-    # 6. Download
-    await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
-    try:            
-        dl_path = await client.download_media(
-            message=message, 
-            file_name=file_path, 
-            progress=progress_for_pyrogram, 
-            progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
-        )                    
-    except Exception as e:        
-        return await rkn_processing.edit(f"⚠️ Download Error: {e}")
-    
-    # 7. Extract Duration (Metadata)
-    duration = 0
-    try:
-        parser = createParser(file_path)
-        metadata = extractMetadata(parser)
-        if metadata and metadata.has("duration"):
-            duration = metadata.get('duration').seconds
-        if parser:
-            parser.close()
-    except:
-        pass
-        
-    # 8. Handle Thumbnail & Caption
-    ph_path = None
-    c_caption = user_data.get('caption', None)
-    c_thumb = user_data.get('file_id', None)
-
-    if c_caption:
-         try:
-             caption = c_caption.format(filename=new_filename, filesize=filesize, duration=convert(duration))
-         except Exception as e:             
-             caption = f"**{new_filename}**"          
-    else:
-         caption = f"**{new_filename}**"
- 
-    # Download Thumbnail if available
-    media_thumbs = getattr(rkn_file, 'thumbs', None)
-    if (media_thumbs or c_thumb):
-         try:
-             if c_thumb:
-                 ph_path = await client.download_media(c_thumb) 
-             else:
-                 ph_path = await client.download_media(media_thumbs[0].file_id)
-             
-             if ph_path and os.path.exists(ph_path):
-                 Image.open(ph_path).convert("RGB").save(ph_path)
-                 img = Image.open(ph_path)
-                 img.resize((320, 320))
-                 img.save(ph_path, "JPEG")
-         except Exception as e:
-             ph_path = None
-
-    # 9. Determine Upload Type
-    upload_type = "document" # Default
-    if message.media == MessageMediaType.VIDEO:
-        upload_type = "video"
+    button = [[InlineKeyboardButton("📁 Dᴏᴄᴜᴍᴇɴᴛ",callback_data = "upload#document")]]
+    if message.media in [MessageMediaType.VIDEO, MessageMediaType.DOCUMENT]:
+        button.append([InlineKeyboardButton("🎥 Vɪᴅᴇᴏ", callback_data = "upload#video")])
     elif message.media == MessageMediaType.AUDIO:
-        upload_type = "audio"
+        button.append([InlineKeyboardButton("🎵 Aᴜᴅɪᴏ", callback_data = "upload#audio")])
     
-    await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-    
-    # 10. Upload Logic (Auto-Handling Large Files)
-    if rkn_file.file_size > 2000 * 1024 * 1024:
-        # Large File Logic (Using Session String Client 'app')
-        filw, error = await upload_files(
-            app, Config.LOG_CHANNEL, upload_type, file_path, 
-            ph_path, caption, duration, rkn_processing
+    # Updated text with emojis for all fields
+    await message.reply(
+            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n\n**__{emoji} ᴍᴇᴅɪᴀ ɪɴꜰᴏ:\n\n"
+                 f"🗃️ ᴏʟᴅ ꜰɪʟᴇ ɴᴀᴍᴇ: `{filename}`\n\n"
+                 f"🏷️ ᴇxᴛᴇɴꜱɪᴏɴ: `{extension_type.upper()}`\n"
+                 f"💾 ꜰɪʟᴇ ꜱɪᴢᴇ: `{filesize}`\n"
+                 f"🧬 ᴍɪᴍᴇ ᴛʏᴇᴩ: `{mime_type}`\n\n"
+                 f"🆔 ᴅᴄ ɪᴅ: `{dcid}`....__**",        
+            reply_to_message_id=message.id,
+            reply_markup=InlineKeyboardMarkup(button)
         )
-        if error:            
-            await remove_path(ph_path, file_path, dl_path)
-            return await rkn_processing.edit(f"⚠️ Upload Error: {error}")
-        
-        # Forward to user from Log Channel
-        from_chat = filw.chat.id
-        mg_id = filw.id
-        await asyncio.sleep(2)
-        await client.copy_message(message.from_user.id, from_chat, mg_id)     
-    else:
-        # Regular File Logic (Using Bot Client)
-        filw, error = await upload_files(
-            client, message.chat.id, upload_type, file_path, 
-            ph_path, caption, duration, rkn_processing
-        )
-        if error:            
-            await remove_path(ph_path, file_path, dl_path)
-            return await rkn_processing.edit(f"⚠️ Upload Error: {error}")        
-
-    # 11. Cleanup, Success Message & Auto-Delete
-    await remove_path(ph_path, file_path, dl_path)
-    await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
-    await asyncio.sleep(2) 
-    await rkn_processing.delete()
-    return
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing):
     """
     Unified function to upload files based on type
+    - Supports both 2GB and 4GB files
+    - Uses same function for all file sizes
+    - Handles document, video, and audio files
     """
     try:
+        # Check if file exists
         if not os.path.exists(file_path):
             return None, f"File not found: {file_path}"
             
+        # Upload document files (2GB & 4GB)
         if upload_type == "document":
             filw = await bot.send_document(
                 sender_id,
@@ -248,6 +132,7 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
                 progress=progress_for_pyrogram,
                 progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         
+        # Upload video files (2GB & 4GB)  
         elif upload_type == "video":
             filw = await bot.send_video(
                 sender_id,
@@ -258,6 +143,7 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
                 progress=progress_for_pyrogram,
                 progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         
+        # Upload audio files (2GB & 4GB)
         elif upload_type == "audio":
             filw = await bot.send_audio(
                 sender_id,
@@ -270,7 +156,132 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
         else:
             return None, f"Unknown upload type: {upload_type}"
         
+        # Return uploaded file object
         return filw, None
         
     except Exception as e:
+        # Return error if upload fails
         return None, str(e)
+
+renamer = EnhancedAutoRenamer()
+
+async def upload_doc(bot, update):
+    rkn_processing = await update.message.edit("`Processing...`")
+        
+    user_id = int(update.message.chat.id) 
+    
+    # msg file location 
+    file = update.message.reply_to_message
+    media = getattr(file, file.media.value)
+
+    # Extract information
+    info = renamer.extract_all_info(media.file_name)
+
+    user_data = await digital_botz.get_user_data(user_id)
+    format_template = user_data.get('format_template', None)
+    
+    # Fallback if no template is set (prevents crash)
+    if not format_template:
+        format_template = "{original}.{ext}"
+
+    # Apply user's format template
+    new_name = renamer.apply_format_template(info, format_template)
+    
+    # Add extension if not present
+    if not new_name.endswith(f".{info['extension']}"):
+        new_name += f".{info['extension']}"
+    
+    # Sanitize filename (remove slashes that cause directory errors)
+    new_filename = new_name.replace("/", "_").replace("\\", "_")
+    
+    # Ensure the directory exists (FIX FOR ERROR)
+    if not os.path.isdir("Renames"):
+        os.makedirs("Renames", exist_ok=True)
+        
+    # File paths for download
+    file_path = f"Renames/{new_filename}"
+    
+    await rkn_processing.edit("`Try To Download....`")    
+    try:            
+        dl_path = await bot.download_media(message=file, file_name=file_path, progress=progress_for_pyrogram, progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()))                    
+    except Exception as e:        
+        return await rkn_processing.edit(f"Download Error: {e}")
+    
+    await rkn_processing.edit("`Try To Uploading....`")        
+    duration = 0
+    try:
+        parser = createParser(file_path)
+        metadata = extractMetadata(parser)
+        if metadata and metadata.has("duration"):
+            duration = metadata.get('duration').seconds
+        if parser:
+            parser.close()
+    except Exception as e:
+        print(f"Error extracting metadata: {e}")
+        # We don't return here so upload can continue even if metadata fails
+        pass
+        
+    ph_path = None
+    c_caption = user_data.get('caption', None)
+    c_thumb = user_data.get('file_id', None)
+
+    if c_caption:
+         try:
+             # adding custom caption 
+             caption = c_caption.format(filename=new_filename, filesize=humanbytes(media.file_size), duration=convert(duration))
+         except Exception as e:             
+             return await rkn_processing.edit(text=f"Yᴏᴜʀ Cᴀᴩᴛɪᴏɴ Eʀʀᴏʀ Exᴄᴇᴩᴛ Kᴇyᴡᴏʀᴅ Aʀɢᴜᴍᴇɴᴛ ●> ({e})")             
+    else:
+         caption = f"**{new_filename}**"
+ 
+    if (media.thumbs or c_thumb):
+         # downloading thumbnail path
+         try:
+             if c_thumb:
+                 ph_path = await bot.download_media(c_thumb) 
+             else:
+                 ph_path = await bot.download_media(media.thumbs[0].file_id)
+             
+             if ph_path and os.path.exists(ph_path):
+                 Image.open(ph_path).convert("RGB").save(ph_path)
+                 img = Image.open(ph_path)
+                 img.resize((320, 320))
+                 img.save(ph_path, "JPEG")
+         except Exception as e:
+             print(f"Error processing thumbnail: {e}")
+             ph_path = None
+
+    upload_type = update.data.split("#")[1]
+    
+    # Use the correct file path based on metadata mode
+    final_file_path = file_path    
+    if media.file_size > 2000 * 1024 * 1024:
+        # Upload file using unified function for large files
+        filw, error = await upload_files(
+            app, Config.LOG_CHANNEL, upload_type, final_file_path, 
+            ph_path, caption, duration, rkn_processing
+        )
+
+        if error:            
+            await remove_path(ph_path, file_path, dl_path)
+            return await rkn_processing.edit(f"Upload Error: {error}")
+        
+        from_chat = filw.chat.id
+        mg_id = filw.id
+        await asyncio.sleep(2)
+        await bot.copy_message(update.from_user.id, from_chat, mg_id)
+        await bot.delete_messages(from_chat, mg_id)        
+    else:
+        # Upload file using unified function for regular files
+        filw, error = await upload_files(
+            bot, update.message.chat.id, upload_type, final_file_path, 
+            ph_path, caption, duration, rkn_processing
+        )
+                   
+        if error:            
+            await remove_path(ph_path, file_path, dl_path)
+            return await rkn_processing.edit(f"Upload Error: {error}")        
+
+    # Clean up files
+    await remove_path(ph_path, file_path, dl_path)
+    return await rkn_processing.edit("Uploaded Successfully....")
