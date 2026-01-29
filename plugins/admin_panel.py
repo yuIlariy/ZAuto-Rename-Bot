@@ -1,47 +1,75 @@
-# (c) @RknDeveloperr
-# Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
-"""
-Apache License 2.0
-Copyright (c) 2025 @Digital_Botz
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Telegram Link : https://t.me/Digital_Botz 
-Repo Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot
-License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/LICENSE
-"""
-
-# extra imports
 from config import Config
 from helper.database import digital_botz
 from helper.utils import get_seconds, humanbytes
 import os, sys, time, asyncio, logging, datetime, pytz, traceback
-
-# pyrogram imports
 from pyrogram.types import Message
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
- 
+
+# Display available plans to the admin or user
+@Client.on_message(filters.command("plans") & filters.user(Config.ADMIN))
+async def show_plans(bot, message):
+    await message.reply(rkn.UPGRADE_PREMIUM)
+
+# Add a user to premium
+@Client.on_message(filters.command("addpremium") & filters.user(Config.ADMIN))
+async def add_premium(bot, message):
+    if len(message.command) < 4:
+        await message.reply("Usage: /addpremium <user_id> <plan> <duration>")
+        return
+    user_id = int(message.command[1])
+    plan = message.command[2]
+    duration = int(message.command[3])  # duration in days
+    # Add premium to the user
+    user_data = {
+        "id": user_id,
+        "expiry_time": datetime.datetime.now() + datetime.timedelta(days=duration),
+        "has_free_trial": False
+    }
+    limit = 536870912000  # Example premium limit, you can modify it as per plans
+    await digital_botz.add_premium(user_id, user_data, limit, plan)
+    await message.reply(f"User {user_id} has been upgraded to premium for {duration} days under the {plan} plan.")
+
+# Remove premium from a user
+@Client.on_message(filters.command("removepremium") & filters.user(Config.ADMIN))
+async def remove_premium(bot, message):
+    if len(message.command) < 2:
+        await message.reply("Usage: /removepremium <user_id>")
+        return
+    user_id = int(message.command[1])
+    # Remove premium from the user
+    await digital_botz.remove_premium(user_id)
+    await message.reply(f"Premium access has been removed from user {user_id}.")
+
+# List all premium users
+@Client.on_message(filters.command("listpremium") & filters.user(Config.ADMIN))
+async def list_premium_users(bot, message):
+    premium_users = await digital_botz.get_all_premium_users()
+    user_list = ""
+    async for user in premium_users:
+        user_list += f"User ID: {user['id']}, Expiry: {user['expiry_time']}\n"
+    if user_list:
+        await message.reply(user_list)
+    else:
+        await message.reply("No premium users found.")
+
+# Check a user's premium status
+@Client.on_message(filters.command("checkpremium") & filters.user(Config.ADMIN))
+async def check_premium_status(bot, message):
+    if len(message.command) < 2:
+        await message.reply("Usage: /checkpremium <user_id>")
+        return
+    user_id = int(message.command[1])
+    is_premium = await digital_botz.has_premium_access(user_id)
+    if is_premium:
+        await message.reply(f"User {user_id} is a premium user.")
+    else:
+        await message.reply(f"User {user_id} is not a premium user.")
+
+# Bot stats and uptime
 @Client.on_message(filters.command(["stats", "status"]) & filters.user(Config.ADMIN))
 async def get_stats(bot, message):
     total_users = await digital_botz.total_users_count()
@@ -77,7 +105,7 @@ async def get_stats(bot, message):
     
     await rkn.edit(text=f"**--Bᴏᴛ Sᴛᴀᴛᴜꜱ--** \n\n**⌚️ Bᴏᴛ Uᴩᴛɪᴍᴇ:** {uptime} \n**🐌 Cᴜʀʀᴇɴᴛ Pɪɴɢ:** `{time_taken_s:.3f} ᴍꜱ` \n**👭 Tᴏᴛᴀʟ Uꜱᴇʀꜱ:** `{total_users}`\n**💸 ᴛᴏᴛᴀʟ ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs:** `{total_premium_users}`")
 
-# bot logs process 
+# Logs and bot restart
 @Client.on_message(filters.command('logs') & filters.user(Config.ADMIN))
 async def log_file(b, m):
     try:
@@ -85,7 +113,7 @@ async def log_file(b, m):
     except Exception as e:
         await m.reply(str(e))
 
-# Restart to cancell all process 
+# Restart to cancel all processes
 @Client.on_message(filters.private & filters.command("restart") & filters.user(Config.ADMIN))
 async def restart_bot(b, m):
     rkn = await b.send_message(text="**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....**", chat_id=m.chat.id)
@@ -98,14 +126,14 @@ async def restart_bot(b, m):
     all_users = await digital_botz.get_all_users()
     async for user in all_users:
         try:
-            restart_msg = f"ʜᴇʏ, {(await b.get_users(user['_id'])).mention}\n\n**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....\n\n✅️ ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛᴇᴅ. ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ.**"
+            restart_msg = f"ʜᴇʏ, {(await b.get_users(user['_id'])).mention}\n\n**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....\n\n✅️ ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪᴇᴅ. ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ.**"
             await b.send_message(user['_id'], restart_msg)
             success += 1
         except InputUserDeactivated:
-            deactivated +=1
+            deactivated += 1
             await digital_botz.delete_user(user['_id'])
         except UserIsBlocked:
-            blocked +=1
+            blocked += 1
             await digital_botz.delete_user(user['_id'])
         except Exception as e:
             failed += 1
@@ -113,13 +141,14 @@ async def restart_bot(b, m):
             print(e)
             pass
         try:
-            await rkn.edit(f"<u>ʀᴇsᴛᴀʀᴛ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ:</u>\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+            await rkn.edit(f"<u>ʀᴇsᴛᴀʀᴛ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ:</u>\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀꜱ: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
         except FloodWait as e:
             await asyncio.sleep(e.value)
     completed_restart = datetime.timedelta(seconds=int(time.time() - start_time))
-    await rkn.edit(f"ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʀᴇsᴛᴀʀᴛ: {completed_restart}\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+    await rkn.edit(f"ᴄᴏᴍᴘᴏʀᴇᴄᴛᴇᴅ ʀᴇsᴛᴀʀᴛ: {completed_restart}\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀꜱ: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
     os.execl(sys.executable, sys.executable, *sys.argv)
 
+# Ban a user
 @Client.on_message(filters.private & filters.command("ban") & filters.user(Config.ADMIN))
 async def ban(c: Client, m: Message):
     if len(m.command) == 1:
@@ -132,7 +161,6 @@ async def ban(c: Client, m: Message):
             quote=True
         )
         return
-
     try:
         user_id = int(m.command[1])
         ban_duration = int(m.command[2])
@@ -147,7 +175,6 @@ async def ban(c: Client, m: Message):
         except:
             traceback.print_exc()
             ban_log_text += f"\n\nUser notification failed! \n\n`{traceback.format_exc()}`"
-
         await digital_botz.ban_user(user_id, ban_duration, ban_reason)
         await m.reply_text(ban_log_text, quote=True)
     except:
@@ -157,6 +184,7 @@ async def ban(c: Client, m: Message):
             quote=True
         )
 
+# Unban a user
 @Client.on_message(filters.private & filters.command("unban") & filters.user(Config.ADMIN))
 async def unban(c: Client, m: Message):
     if len(m.command) == 1:
@@ -168,7 +196,6 @@ async def unban(c: Client, m: Message):
             quote=True
         )
         return
-
     try:
         user_id = int(m.command[1])
         unban_log_text = f"Unbanning user {user_id}"
@@ -187,7 +214,7 @@ async def unban(c: Client, m: Message):
             quote=True
         )
 
-
+# List banned users
 @Client.on_message(filters.private & filters.command("banned_users") & filters.user(Config.ADMIN))
 async def _banned_users(_, m: Message):
     all_banned_users = await digital_botz.get_all_banned_users()
@@ -210,13 +237,13 @@ async def _banned_users(_, m: Message):
         return
     await m.reply_text(reply_text, True)
 
-     
+# Broadcast message to all users
 @Client.on_message(filters.command("broadcast") & filters.user(Config.ADMIN) & filters.reply)
 async def broadcast_handler(bot: Client, m: Message):
     await bot.send_message(Config.LOG_CHANNEL, f"{m.from_user.mention} or {m.from_user.id} Iꜱ ꜱᴛᴀʀᴛᴇᴅ ᴛʜᴇ Bʀᴏᴀᴅᴄᴀꜱᴛ......")
     all_users = await digital_botz.get_all_users()
     broadcast_msg = m.reply_to_message
-    sts_msg = await m.reply_text("Bʀᴏᴀᴅᴄᴀꜱᴛ Sᴛᴀʀᴛᴇᴅ..!") 
+    sts_msg = await m.reply_text("Bʀᴏᴀᴄᴛ Sᴛᴀʀᴛᴇᴅ..!") 
     done = 0
     failed = 0
     success = 0
@@ -232,9 +259,9 @@ async def broadcast_handler(bot: Client, m: Message):
            await digital_botz.delete_user(user['_id'])
         done += 1
         if not done % 20:
-           await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Iɴ Pʀᴏɢʀᴇꜱꜱ: \nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users} \nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+           await sts_msg.edit(f"Bʀᴏᴀᴄᴛ Iɴ Pʀᴏɢʀᴇꜱꜱ: \nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users} \nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇss: {success}\nFᴀɪʟᴇᴅ: {failed}")
     completed_in = datetime.timedelta(seconds=int(time.time() - start_time))
-    await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Cᴏᴍᴩʟᴇᴛᴇᴅ: \nCᴏᴍᴩʟᴇᴛᴇᴅ Iɴ `{completed_in}`.\n\nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users}\nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+    await sts_msg.edit(f"Bʀᴏᴀᴄᴛ Cᴏᴍᴩʟᴇᴛᴇᴅ: \nCᴏᴍᴩʟᴇᴛᴇᴅ Iɴ `{completed_in}`.\n\nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users}\nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇss: {success}\nFᴀɪʟᴇᴅ: {failed}")
            
 async def send_msg(user_id, message):
     try:
@@ -255,9 +282,3 @@ async def send_msg(user_id, message):
     except Exception as e:
         logger.error(f"{user_id} : {e}")
         return 500
- 
-
-# Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
