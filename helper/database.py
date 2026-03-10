@@ -168,6 +168,20 @@ class Database:
             {'$set': {'last_updated': time.time()}, '$inc': {'total_sent': sent, 'total_recv': recv}},
             upsert=True
         )
+
+    # --- ADDED: Network Stats Bridge for start_and_cb.py ---
+    async def get_network_stats(self):
+        """Fetches total aggregated stats formatted for live status callbacks"""
+        stats = await self.get_bot_stats()
+        return {
+            "sent": stats.get("total_sent", 0), 
+            "recv": stats.get("total_recv", 0)
+        }
+        
+    async def update_network_stats(self, sent_delta, recv_delta):
+        """Alias for update_traffic to ensure full compatibility across files"""
+        await self.update_traffic(sent_delta, recv_delta)
+    # -------------------------------------------------------
     
 digital_botz = Database(Config.DB_URL, Config.DB_NAME)
 
