@@ -139,9 +139,9 @@ async def cb_handler(client, query: CallbackQuery):
         uptime = get_uptime(client.uptime)
         
         # --- FIXED: Fetch Persistent Stats ---
-        db_stats = await digital_botz.get_bot_stats()
-        db_sent = db_stats.get('total_sent', 0)
-        db_recv = db_stats.get('total_recv', 0)
+        db_stats = await digital_botz.get_network_stats()
+        db_sent = db_stats.get('sent', 0)
+        db_recv = db_stats.get('recv', 0)
         
         sent = humanbytes(db_sent + psutil.net_io_counters().bytes_sent)
         recv = humanbytes(db_recv + psutil.net_io_counters().bytes_recv)
@@ -163,9 +163,9 @@ async def cb_handler(client, query: CallbackQuery):
         free = humanbytes(free)
         
         # --- FIXED: Fetch Persistent Stats ---
-        db_stats = await digital_botz.get_bot_stats()
-        db_sent = db_stats.get('total_sent', 0)
-        db_recv = db_stats.get('total_recv', 0)
+        db_stats = await digital_botz.get_network_stats()
+        db_sent = db_stats.get('sent', 0)
+        db_recv = db_stats.get('recv', 0)
         
         sent = humanbytes(db_sent + psutil.net_io_counters().bytes_sent)
         recv = humanbytes(db_recv + psutil.net_io_counters().bytes_recv)
