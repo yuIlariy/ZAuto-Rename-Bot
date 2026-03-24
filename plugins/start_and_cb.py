@@ -42,9 +42,43 @@ def get_uptime(start_time):
     return uptime_str.strip()
 # ----------------------------------
 
+# --- Background Network Tracker ---
+bg_task_started = False
+
+async def network_stats_tracker():
+    last_sent = psutil.net_io_counters().bytes_sent
+    last_recv = psutil.net_io_counters().bytes_recv
+    
+    while True:
+        await asyncio.sleep(60) # Updates the database every 1 minute
+        
+        current_sent = psutil.net_io_counters().bytes_sent
+        current_recv = psutil.net_io_counters().bytes_recv
+        
+        delta_sent = current_sent - last_sent
+        delta_recv = current_recv - last_recv
+        
+        # If VPS rebooted, psutil resets to 0, so current will be less than last.
+        if delta_sent < 0: delta_sent = current_sent
+        if delta_recv < 0: delta_recv = current_recv
+        
+        # Only update DB if there was actually traffic
+        if delta_sent > 0 or delta_recv > 0:
+            await digital_botz.update_network_stats(delta_sent, delta_recv)
+            
+        last_sent = current_sent
+        last_recv = current_recv
+# ----------------------------------
+
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
+    # Start the tracker safely if it isn't running yet
+    global bg_task_started
+    if not bg_task_started:
+        asyncio.create_task(network_stats_tracker())
+        bg_task_started = True
+
     start_button = [[        
         InlineKeyboardButton('Uᴩᴅᴀ𝚃ᴇꜱ', url='https://t.me/OtherBs'),
         InlineKeyboardButton('Sᴜᴩᴩᴏʀ𝚃', url='https://t.me/DigitalBotz_Support')
@@ -63,6 +97,12 @@ async def start(client, message):
 
 @Client.on_callback_query()
 async def cb_handler(client, query: CallbackQuery):
+    # Start the tracker safely if it isn't running yet
+    global bg_task_started
+    if not bg_task_started:
+        asyncio.create_task(network_stats_tracker())
+        bg_task_started = True
+
     data = query.data 
     if data == "start":
         start_button = [[        
@@ -138,14 +178,12 @@ async def cb_handler(client, query: CallbackQuery):
         # Fixed: Use custom get_uptime function
         uptime = get_uptime(client.uptime)
         
-        # --- FIXED: Fetch Persistent Stats ---
+        # --- FIXED: Pure Database Call ---
         db_stats = await digital_botz.get_network_stats()
-        db_sent = db_stats.get('sent', 0)
-        db_recv = db_stats.get('recv', 0)
         
-        sent = humanbytes(db_sent + psutil.net_io_counters().bytes_sent)
-        recv = humanbytes(db_recv + psutil.net_io_counters().bytes_recv)
-        # -------------------------------------
+        sent = humanbytes(db_stats.get('sent', 0))
+        recv = humanbytes(db_stats.get('recv', 0))
+        # ---------------------------------
 
         await query.message.edit_text(
             text=rkn.BOT_STATUS.format(uptime, total_users, total_premium_users, sent, recv),
@@ -162,14 +200,12 @@ async def cb_handler(client, query: CallbackQuery):
         used = humanbytes(used)
         free = humanbytes(free)
         
-        # --- FIXED: Fetch Persistent Stats ---
+        # --- FIXED: Pure Database Call ---
         db_stats = await digital_botz.get_network_stats()
-        db_sent = db_stats.get('sent', 0)
-        db_recv = db_stats.get('recv', 0)
-        
-        sent = humanbytes(db_sent + psutil.net_io_counters().bytes_sent)
-        recv = humanbytes(db_recv + psutil.net_io_counters().bytes_recv)
-        # -------------------------------------
+
+        sent = humanbytes(db_stats.get('sent', 0))
+        recv = humanbytes(db_stats.get('recv', 0))
+        # ---------------------------------
 
         cpu_usage = psutil.cpu_percent()
         ram_usage = psutil.virtual_memory().percent
