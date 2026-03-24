@@ -23,7 +23,49 @@ from config import Config, rkn
 from helper.utils import humanbytes
 from plugins import __version__ as _bot_version_, __developer__, __database__, __library__, __language__, __programer__
 
-# NOTE: 'upload_doc' import removed as it is no longer needed
+# --- GLOBAL VARIABLES FOR NETWORK STATS ---
+STATS_STARTED = False
+LAST_SENT = 0
+LAST_RECV = 0
+
+async def stats_loop():
+    """Background task to accumulate network usage to DB"""
+    global LAST_SENT, LAST_RECV
+    # Initialize with current values
+    LAST_SENT = psutil.net_io_counters().bytes_sent
+    LAST_RECV = psutil.net_io_counters().bytes_recv
+    
+    while True:
+        try:
+            await asyncio.sleep(60) # Update every 1 minute
+            
+            curr_sent = psutil.net_io_counters().bytes_sent
+            curr_recv = psutil.net_io_counters().bytes_recv
+            
+            # Calculate delta (difference since last check)
+            # If current < last, it means VPS restarted and counters reset
+            if curr_sent < LAST_SENT:
+                sent_delta = curr_sent
+            else:
+                sent_delta = curr_sent - LAST_SENT
+                
+            if curr_recv < LAST_RECV:
+                recv_delta = curr_recv
+            else:
+                recv_delta = curr_recv - LAST_RECV
+            
+            # Update global counters
+            LAST_SENT = curr_sent
+            LAST_RECV = curr_recv
+            
+            # Send delta to database to add to total
+            if sent_delta > 0 or recv_delta > 0:
+                await digital_botz.update_network_stats(sent_delta, recv_delta)
+                
+        except Exception as e:
+            print(f"Error in stats_loop: {e}")
+            await asyncio.sleep(60)
+# ------------------------------------------
 
 # --- Helper Function for Uptime ---
 def get_uptime(start_time):
@@ -42,42 +84,14 @@ def get_uptime(start_time):
     return uptime_str.strip()
 # ----------------------------------
 
-# --- Background Network Tracker ---
-bg_task_started = False
-
-async def network_stats_tracker():
-    last_sent = psutil.net_io_counters().bytes_sent
-    last_recv = psutil.net_io_counters().bytes_recv
-    
-    while True:
-        await asyncio.sleep(60) # Updates the database every 1 minute
-        
-        current_sent = psutil.net_io_counters().bytes_sent
-        current_recv = psutil.net_io_counters().bytes_recv
-        
-        delta_sent = current_sent - last_sent
-        delta_recv = current_recv - last_recv
-        
-        # If VPS rebooted, psutil resets to 0, so current will be less than last.
-        if delta_sent < 0: delta_sent = current_sent
-        if delta_recv < 0: delta_recv = current_recv
-        
-        # Only update DB if there was actually traffic
-        if delta_sent > 0 or delta_recv > 0:
-            await digital_botz.update_network_stats(delta_sent, delta_recv)
-            
-        last_sent = current_sent
-        last_recv = current_recv
-# ----------------------------------
-
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
-    # Start the tracker safely if it isn't running yet
-    global bg_task_started
-    if not bg_task_started:
-        asyncio.create_task(network_stats_tracker())
-        bg_task_started = True
+    # Safely start the background tracker
+    global STATS_STARTED
+    if not STATS_STARTED:
+        asyncio.create_task(stats_loop())
+        STATS_STARTED = True
 
     start_button = [[        
         InlineKeyboardButton('Uᴩᴅᴀ𝚃ᴇꜱ', url='https://t.me/OtherBs'),
@@ -97,11 +111,11 @@ async def start(client, message):
 
 @Client.on_callback_query()
 async def cb_handler(client, query: CallbackQuery):
-    # Start the tracker safely if it isn't running yet
-    global bg_task_started
-    if not bg_task_started:
-        asyncio.create_task(network_stats_tracker())
-        bg_task_started = True
+    # Safely start the background tracker
+    global STATS_STARTED
+    if not STATS_STARTED:
+        asyncio.create_task(stats_loop())
+        STATS_STARTED = True
 
     data = query.data 
     if data == "start":
