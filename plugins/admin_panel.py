@@ -61,21 +61,77 @@ async def get_stats(bot, message):
         uptime += f"{hours}h "
     uptime += f"{minutes}m {seconds}s"
     
-    # Check for premium users (handles if bot is not premium)
-    try:
-        if getattr(bot, 'premium', False): # Safely check if 'premium' attr exists
-            total_premium_users = await digital_botz.total_premium_users_count()
-        else:
-            total_premium_users = "Disabled ✅"
-    except:
-        total_premium_users = "Disabled ✅"
+    # --- ACCURATE PREMIUM COUNT ---
+    total_premium_users = await digital_botz.total_premium_users_count()
 
     start_t = time.time()
     rkn = await message.reply('**ᴘʀᴏᴄᴇssɪɴɢ.....**')    
     end_t = time.time()
     time_taken_s = (end_t - start_t) * 1000
     
-    await rkn.edit(text=f"**--Bᴏᴛ Sᴛᴀᴛᴜꜱ--** \n\n**⌚️ Bᴏᴛ Uᴩᴛɪᴍᴇ:** {uptime} \n**🐌 Cᴜʀʀᴇɴᴛ Pɪɴɢ:** `{time_taken_s:.3f} ᴍꜱ` \n**👭 Tᴏᴛᴀʟ Uꜱᴇʀꜱ:** `{total_users}`\n**💸 ᴛᴏᴛᴀʟ ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs:** `{total_premium_users}`")
+    await rkn.edit(text=f"**--Bᴏᴛ Sᴛᴀᴛᴜꜱ--** \n\n**⌚️ Bᴏᴛ Uᴩᴛɪᴍᴇ:** {uptime} \n**🐌 Cᴜʀʀᴇɴᴛ Pɪɴɢ:** `{time_taken_s:.3f} ᴍꜱ` \n**👭 Tᴏᴛᴀʟ Uꜱᴇʀꜱ:** `{total_users}`\n**💸 Tᴏᴛᴀʟ Pʀᴇᴍɪᴜᴍ Uꜱᴇʀꜱ:** `{total_premium_users}`")
+
+# --- ADD / REMOVE PREMIUM COMMANDS ---
+@Client.on_message(filters.command("addprem") & filters.user(Config.ADMIN))
+async def add_premium_user(bot, message):
+    if len(message.command) == 1:
+        await message.reply_text("⚠️ **Usage:** `/addprem user_id`\n\nExample: `/addprem 123456789`")
+        return
+
+    try:
+        user_id = int(message.command[1])
+        if not await digital_botz.is_user_exist(user_id):
+            return await message.reply_text("⚠️ User not found in database. They need to start the bot first.")
+
+        await digital_botz.add_premium(user_id)
+        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium!**")
+        
+        # Try to notify the user
+        try:
+            await bot.send_message(
+                user_id, 
+                "🎉 **Congratulations!**\n\nYou have been upgraded to **Premium Status**! 🌟\n\n"
+                "• ♾️ No 6GB Daily Limit\n"
+                "• 🚀 Upload files larger than 2GB\n"
+                "• ⚡ Priority Processing\n\n"
+                "Thank you for your support!"
+            )
+        except:
+            pass # User might have blocked the bot
+            
+    except ValueError:
+        await message.reply_text("⚠️ **Error:** User ID must be a number.")
+    except Exception as e:
+        await message.reply_text(f"⚠️ **Error:** {e}")
+
+@Client.on_message(filters.command("rmprem") & filters.user(Config.ADMIN))
+async def remove_premium_user(bot, message):
+    if len(message.command) == 1:
+        await message.reply_text("⚠️ **Usage:** `/rmprem user_id`\n\nExample: `/rmprem 123456789`")
+        return
+
+    try:
+        user_id = int(message.command[1])
+        if not await digital_botz.is_user_exist(user_id):
+            return await message.reply_text("⚠️ User not found in database.")
+
+        await digital_botz.remove_premium(user_id)
+        await message.reply_text(f"✅ **Successfully removed Premium status from user `{user_id}`.**")
+        
+        # Try to notify the user
+        try:
+            await bot.send_message(
+                user_id, 
+                "⚠️ **Your Premium Subscription has ended or been revoked.**\n\n"
+                "You have been moved back to the free tier. Contact @xspes if you think this is a mistake or to renew!"
+            )
+        except:
+            pass
+            
+    except ValueError:
+        await message.reply_text("⚠️ **Error:** User ID must be a number.")
+    except Exception as e:
+        await message.reply_text(f"⚠️ **Error:** {e}")
 
 # bot logs process 
 @Client.on_message(filters.command('logs') & filters.user(Config.ADMIN))
