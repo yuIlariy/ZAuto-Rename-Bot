@@ -47,6 +47,7 @@ class Database:
             join_date=datetime.date.today().isoformat(),
             format_template="{filename}",           
             is_premium=False,
+            premium_expiry=None,
             daily_upload_bytes=0,
             last_upload_date=datetime.date.today().isoformat(),
             ban_status=dict(
@@ -183,19 +184,35 @@ class Database:
         await self.update_traffic(sent_delta, recv_delta)
         
     # --- PREMIUM & LIMIT FUNCTIONS ---
-    async def add_premium(self, user_id: int):
-        """Upgrades a user to premium"""
-        await self.col.update_one({'_id': int(user_id)}, {'$set': {'is_premium': True}})
+    async def add_premium(self, user_id: int, days: int):
+        """Upgrades a user to premium with an expiry date"""
+        expiry_date = datetime.date.today() + datetime.timedelta(days=days)
+        await self.col.update_one(
+            {'_id': int(user_id)}, 
+            {'$set': {'is_premium': True, 'premium_expiry': expiry_date.isoformat()}}
+        )
         
     async def remove_premium(self, user_id: int):
         """Removes premium status from a user"""
-        await self.col.update_one({'_id': int(user_id)}, {'$set': {'is_premium': False}})
+        await self.col.update_one(
+            {'_id': int(user_id)}, 
+            {'$set': {'is_premium': False, 'premium_expiry': None}}
+        )
 
     async def check_premium(self, user_id: int):
-        """Checks if user is premium"""
+        """Checks if user is premium and if their subscription is still valid"""
         user = await self.col.find_one({'_id': int(user_id)})
-        if user:
-            return user.get('is_premium', False)
+        if user and user.get('is_premium', False):
+            expiry = user.get('premium_expiry')
+            if expiry:
+                # Check if today is past the expiry date
+                if datetime.date.today() <= datetime.date.fromisoformat(expiry):
+                    return True
+                else:
+                    # Subscription expired, remove premium
+                    await self.remove_premium(user_id)
+                    return False
+            return True # Fallback for lifetime/legacy premium
         return False
         
     async def check_daily_limit(self, user_id: int, file_size: int):
@@ -204,7 +221,8 @@ class Database:
         if not user:
             return True
             
-        if user.get('is_premium', False):
+        # Check premium using the new time-aware function
+        if await self.check_premium(user_id):
             return True
             
         today = datetime.date.today().isoformat()
