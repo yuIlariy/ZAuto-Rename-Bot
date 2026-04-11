@@ -86,6 +86,56 @@ Send your User ID after payment!"""
 
 # --- COMMANDS ---
 
+@Client.on_message(filters.private & filters.command("myplan"))
+async def myplan_cmd(client, message):
+    user_id = message.from_user.id
+    user_data = await digital_botz.get_user_data(user_id)
+    
+    if not user_data:
+        return await message.reply_text("❌ **User data not found. Please /start the bot first.**")
+
+    is_premium = await digital_botz.check_premium(user_id)
+    
+    if is_premium:
+        expiry_str = user_data.get('premium_expiry')
+        if expiry_str:
+            expiry_date = datetime.date.fromisoformat(expiry_str)
+            today = datetime.date.today()
+            remaining_days = (expiry_date - today).days
+            
+            text = (
+                "**✨ Yᴏᴜʀ Pʀᴇᴍɪᴜᴍ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ ✨**\n\n"
+                f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
+                "🆔 **Uꜱᴇʀ ID:** `{}`\n"
+                "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ 💎`\n"
+                "📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{}`\n"
+                "⏳ **Rᴇᴍᴀɪɴɪɴɢ Dᴀyꜱ:** `{}` ᴅᴀʏs\n\n"
+                "**🚀 Eɴᴊᴏy Yᴏᴜʀ Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ!**"
+            ).format(user_id, expiry_date.strftime('%d %B %Y'), max(0, remaining_days))
+        else:
+            text = (
+                "**✨ Yᴏᴜʀ Pʀᴇᴍɪᴜᴍ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ ✨**\n\n"
+                "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ ʟɪғᴇᴛɪᴍᴇ ♾️`\n"
+                "🚀 **Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ Fᴏʀᴇᴠᴇʀ!**"
+            )
+        
+        await message.reply_text(text)
+    
+    else:
+        # Free User logic
+        text = (
+            "**ℹ️ Yᴏᴜʀ Cᴜʀʀᴇɴᴛ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ**\n\n"
+            f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
+            "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ғʀᴇᴇ ᴜsᴇʀ ✅`\n"
+            "📅 **Exᴩɪʀy Dᴀᴛᴇ:** `ɴᴏ ᴇxᴘɪʀʏ`\n"
+            "📊 **Dᴀɪʟy Lɪᴍɪᴛ:** `6ɢʙ / ᴅᴀʏ`\n"
+            "📂 **Mᴀx Fɪʟᴇ Sɪᴢᴇ:** `2ɢʙ`\n\n"
+            "**🌟 Uᴩɢʀᴀᴅᴇ ᴛᴏ Pʀᴇᴍɪᴜᴍ ꜰᴏʀ 4GB+ Uᴩʟᴏᴀᴅꜱ ᴀɴᴅ Uɴʟɪᴍɪᴛᴇᴅ Dᴀɪʟy Uꜱᴀɢᴇ!**"
+        )
+        btn = [[InlineKeyboardButton("💎 Uᴩɢʀᴀᴅᴇ Pʟᴀɴ", callback_data="premium_plans")]]
+        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(btn))
+
+
 @Client.on_message(filters.private & filters.command(["plans", "upgrade"]))
 async def plans_cmd(client, message):
     btn = [[InlineKeyboardButton("💳 Pᴀʏ Vɪᴀ Cʀʏᴘᴛᴏ (Aᴅᴍɪɴ)", url="https://t.me/xspes")],
