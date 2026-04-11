@@ -31,7 +31,6 @@ import motor.motor_asyncio, datetime, pytz, time
 
 # bots imports
 from config import Config
-# NOTE: Removed 'from helper.utils import send_log' from here to prevent circular import
 
 class Database:
     def __init__(self, uri, database_name):
@@ -48,6 +47,8 @@ class Database:
             join_date=datetime.date.today().isoformat(),
             format_template="{filename}",           
             is_premium=False,
+            daily_upload_bytes=0,
+            last_upload_date=datetime.date.today().isoformat(),
             ban_status=dict(
                 is_banned=False,
                 ban_duration=0,
@@ -169,7 +170,6 @@ class Database:
             upsert=True
         )
 
-    # --- ADDED: Network Stats Bridge for start_and_cb.py ---
     async def get_network_stats(self):
         """Fetches total aggregated stats formatted for live status callbacks"""
         stats = await self.get_bot_stats()
@@ -181,7 +181,67 @@ class Database:
     async def update_network_stats(self, sent_delta, recv_delta):
         """Alias for update_traffic to ensure full compatibility across files"""
         await self.update_traffic(sent_delta, recv_delta)
-    # -------------------------------------------------------
+        
+    # --- PREMIUM & LIMIT FUNCTIONS ---
+    async def add_premium(self, user_id: int):
+        """Upgrades a user to premium"""
+        await self.col.update_one({'_id': int(user_id)}, {'$set': {'is_premium': True}})
+        
+    async def remove_premium(self, user_id: int):
+        """Removes premium status from a user"""
+        await self.col.update_one({'_id': int(user_id)}, {'$set': {'is_premium': False}})
+
+    async def check_premium(self, user_id: int):
+        """Checks if user is premium"""
+        user = await self.col.find_one({'_id': int(user_id)})
+        if user:
+            return user.get('is_premium', False)
+        return False
+        
+    async def check_daily_limit(self, user_id: int, file_size: int):
+        """Checks if free user has exceeded 6GB daily limit. Premium always returns True."""
+        user = await self.col.find_one({'_id': int(user_id)})
+        if not user:
+            return True
+            
+        if user.get('is_premium', False):
+            return True
+            
+        today = datetime.date.today().isoformat()
+        last_date = user.get('last_upload_date', today)
+        daily_bytes = user.get('daily_upload_bytes', 0)
+        
+        # Reset if it's a new day
+        if last_date != today:
+            daily_bytes = 0
+            
+        FREE_LIMIT = 6 * 1024 * 1024 * 1024 # 6GB in bytes
+        if daily_bytes + file_size > FREE_LIMIT:
+            return False
+        return True
+
+    async def update_daily_limit(self, user_id: int, file_size: int):
+        """Adds the processed file size to the user's daily limit tracker"""
+        user = await self.col.find_one({'_id': int(user_id)})
+        if not user:
+            return
+            
+        today = datetime.date.today().isoformat()
+        last_date = user.get('last_upload_date', today)
+        daily_bytes = user.get('daily_upload_bytes', 0)
+        
+        # Reset if it's a new day
+        if last_date != today:
+            daily_bytes = 0
+            
+        await self.col.update_one(
+            {'_id': int(user_id)},
+            {'$set': {
+                'daily_upload_bytes': daily_bytes + file_size,
+                'last_upload_date': today
+            }}
+        )
+    # ---------------------------------
     
 digital_botz = Database(Config.DB_URL, Config.DB_NAME)
 
