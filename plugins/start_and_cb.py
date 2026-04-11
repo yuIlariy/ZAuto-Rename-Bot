@@ -99,22 +99,36 @@ async def myplan_cmd(client, message):
     if is_premium:
         expiry_str = user_data.get('premium_expiry')
         if expiry_str:
+            # Parse the expiry date
             expiry_date = datetime.date.fromisoformat(expiry_str)
-            today = datetime.date.today()
-            remaining_days = (expiry_date - today).days
+            # Set the exact expiry time to the very end of the expiry day (23:59:59)
+            expiry_datetime = datetime.datetime.combine(expiry_date, datetime.time(23, 59, 59))
+            now = datetime.datetime.now()
+            
+            # Calculate the time difference
+            diff = expiry_datetime - now
+            if diff.total_seconds() > 0:
+                days = diff.days
+                hours, remainder = divmod(diff.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                remaining_str = f"{days} ᴅᴀʏs, {hours} ʜᴏᴜʀs, {minutes} ᴍɪɴᴜᴛᴇs"
+            else:
+                remaining_str = "0 ᴅᴀʏs, 0 ʜᴏᴜʀs, 0 ᴍɪɴᴜᴛᴇs"
             
             text = (
                 "**✨ Yᴏᴜʀ Pʀᴇᴍɪᴜᴍ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ ✨**\n\n"
                 f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
-                "🆔 **Uꜱᴇʀ ID:** `{}`\n"
+                f"🆔 **Uꜱᴇʀ ID:** `{user_id}`\n"
                 "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ 💎`\n"
-                "📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{}`\n"
-                "⏳ **Rᴇᴍᴀɪɴɪɴɢ Dᴀyꜱ:** `{}` ᴅᴀʏs\n\n"
+                f"📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{expiry_date.strftime('%d %B %Y')}`\n"
+                f"⏳ **Rᴇᴍᴀɪɴɪɴɢ Tɪᴍᴇ:** `{remaining_str}`\n\n"
                 "**🚀 Eɴᴊᴏy Yᴏᴜʀ Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ!**"
-            ).format(user_id, expiry_date.strftime('%d %B %Y'), max(0, remaining_days))
+            )
         else:
             text = (
                 "**✨ Yᴏᴜʀ Pʀᴇᴍɪᴜᴍ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ ✨**\n\n"
+                f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
+                f"🆔 **Uꜱᴇʀ ID:** `{user_id}`\n"
                 "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ ʟɪғᴇᴛɪᴍᴇ ♾️`\n"
                 "🚀 **Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ Fᴏʀᴇᴠᴇʀ!**"
             )
@@ -134,7 +148,6 @@ async def myplan_cmd(client, message):
         )
         btn = [[InlineKeyboardButton("💎 Uᴩɢʀᴀᴅᴇ Pʟᴀɴ", callback_data="premium_plans")]]
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(btn))
-
 
 @Client.on_message(filters.private & filters.command(["plans", "upgrade"]))
 async def plans_cmd(client, message):
