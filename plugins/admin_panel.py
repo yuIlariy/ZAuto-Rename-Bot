@@ -74,23 +74,31 @@ async def get_stats(bot, message):
 # --- ADD / REMOVE PREMIUM COMMANDS ---
 @Client.on_message(filters.command("addprem") & filters.user(Config.ADMIN))
 async def add_premium_user(bot, message):
-    if len(message.command) == 1:
-        await message.reply_text("⚠️ **Usage:** `/addprem user_id`\n\nExample: `/addprem 123456789`")
+    if len(message.command) < 2:
+        await message.reply_text(
+            "⚠️ **Usage:** `/addprem user_id [days]`\n\n"
+            "Example for 1 Month: `/addprem 123456789 30`\n"
+            "If days are not provided, it defaults to 30 days."
+        )
         return
 
     try:
         user_id = int(message.command[1])
+        days = int(message.command[2]) if len(message.command) > 2 else 30 # Default to 1 Month
+        
         if not await digital_botz.is_user_exist(user_id):
             return await message.reply_text("⚠️ User not found in database. They need to start the bot first.")
 
-        await digital_botz.add_premium(user_id)
-        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium!**")
+        await digital_botz.add_premium(user_id, days)
+        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium for {days} days!**")
         
         # Try to notify the user
         try:
             await bot.send_message(
                 user_id, 
-                "🎉 **Congratulations!**\n\nYou have been upgraded to **Premium Status**! 🌟\n\n"
+                f"🎉 **Congratulations!**\n\n"
+                f"Your payment was successful! You have been upgraded to **Premium Status** for **{days} days**! 🌟\n\n"
+                "**Premium Features Unlocked:**\n"
                 "• ♾️ No 6GB Daily Limit\n"
                 "• 🚀 Upload files larger than 2GB\n"
                 "• ⚡ Priority Processing\n\n"
@@ -100,7 +108,7 @@ async def add_premium_user(bot, message):
             pass # User might have blocked the bot
             
     except ValueError:
-        await message.reply_text("⚠️ **Error:** User ID must be a number.")
+        await message.reply_text("⚠️ **Error:** User ID and Days must be numbers.")
     except Exception as e:
         await message.reply_text(f"⚠️ **Error:** {e}")
 
@@ -123,7 +131,7 @@ async def remove_premium_user(bot, message):
             await bot.send_message(
                 user_id, 
                 "⚠️ **Your Premium Subscription has ended or been revoked.**\n\n"
-                "You have been moved back to the free tier. Contact @xspes if you think this is a mistake or to renew!"
+                "You have been moved back to the free tier. Send `/plans` to check out our cheap plans starting at just 1 USDT, or contact @xspes to renew!"
             )
         except:
             pass
