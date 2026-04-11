@@ -185,8 +185,9 @@ class Database:
         
     # --- PREMIUM & LIMIT FUNCTIONS ---
     async def add_premium(self, user_id: int, days: int):
-        """Upgrades a user to premium with an expiry date"""
-        expiry_date = datetime.date.today() + datetime.timedelta(days=days)
+        """Upgrades a user to premium with an exact time expiry"""
+        # Using datetime.now() for precise 24-hour calculations
+        expiry_date = datetime.datetime.now() + datetime.timedelta(days=days)
         await self.col.update_one(
             {'_id': int(user_id)}, 
             {'$set': {'is_premium': True, 'premium_expiry': expiry_date.isoformat()}}
@@ -205,8 +206,15 @@ class Database:
         if user and user.get('is_premium', False):
             expiry = user.get('premium_expiry')
             if expiry:
-                # Check if today is past the expiry date
-                if datetime.date.today() <= datetime.date.fromisoformat(expiry):
+                # Handle exact timestamp parsing with a fallback for old formats
+                try:
+                    expiry_dt = datetime.datetime.fromisoformat(expiry)
+                except ValueError:
+                    # Fallback for old "YYYY-MM-DD" entries
+                    expiry_dt = datetime.datetime.combine(datetime.date.fromisoformat(expiry), datetime.time.max)
+
+                # Compare exact timestamps
+                if datetime.datetime.now() <= expiry_dt:
                     return True
                 else:
                     # Subscription expired, remove premium
@@ -225,6 +233,7 @@ class Database:
         if await self.check_premium(user_id):
             return True
             
+        # Limits reset daily at midnight server time, so date.today() is correct here
         today = datetime.date.today().isoformat()
         last_date = user.get('last_upload_date', today)
         daily_bytes = user.get('daily_upload_bytes', 0)
