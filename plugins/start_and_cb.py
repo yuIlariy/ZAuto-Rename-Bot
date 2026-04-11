@@ -99,10 +99,14 @@ async def myplan_cmd(client, message):
     if is_premium:
         expiry_str = user_data.get('premium_expiry')
         if expiry_str:
-            # Parse the expiry date
-            expiry_date = datetime.date.fromisoformat(expiry_str)
-            # Set the exact expiry time to the very end of the expiry day (23:59:59)
-            expiry_datetime = datetime.datetime.combine(expiry_date, datetime.time(23, 59, 59))
+            # Parse the exact expiry timestamp
+            try:
+                expiry_datetime = datetime.datetime.fromisoformat(expiry_str)
+            except ValueError:
+                # Fallback just in case they have an old 'date-only' format saved
+                expiry_date = datetime.date.fromisoformat(expiry_str)
+                expiry_datetime = datetime.datetime.combine(expiry_date, datetime.time(23, 59, 59))
+                
             now = datetime.datetime.now()
             
             # Calculate the time difference
@@ -120,7 +124,7 @@ async def myplan_cmd(client, message):
                 f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
                 f"🆔 **Uꜱᴇʀ ID:** `{user_id}`\n"
                 "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ 💎`\n"
-                f"📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{expiry_date.strftime('%d %B %Y')}`\n"
+                f"📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{expiry_datetime.strftime('%d %B %Y - %I:%M %p')}`\n"
                 f"⏳ **Rᴇᴍᴀɪɴɪɴɢ Tɪᴍᴇ:** `{remaining_str}`\n\n"
                 "**🚀 Eɴᴊᴏy Yᴏᴜʀ Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ!**"
             )
