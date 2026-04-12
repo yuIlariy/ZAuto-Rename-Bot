@@ -50,15 +50,29 @@ async def handle_banned_user_status(bot, message):
     await digital_botz.add_user(bot, message) 
     user_id = message.from_user.id
     ban_status = await digital_botz.get_ban_status(user_id)
+    
     if ban_status.get("is_banned", False):
-        if ( datetime.date.today() - datetime.date.fromisoformat(ban_status["banned_on"])
-        ).days > ban_status["ban_duration"]:
-            await digital_botz.remove_ban(user_id)
-        else:
-            return await message.reply_text("Sorry, 😔 You are Banned!.. Please Contact - @xspes") 
+        try:
+            # Safely handle both the new datetime format and the old date-only format
+            banned_on_str = ban_status["banned_on"]
+            if "T" in banned_on_str or ":" in banned_on_str:
+                banned_on = datetime.datetime.fromisoformat(banned_on_str).date()
+            else:
+                banned_on = datetime.date.fromisoformat(banned_on_str)
+                
+            if (datetime.date.today() - banned_on).days > ban_status.get("ban_duration", 0):
+                await digital_botz.remove_ban(user_id)
+            else:
+                return await message.reply_text("Sorry, 😔 You are Banned!.. Please Contact - @xspes") 
+        except Exception as e:
+            print(f"Error checking ban status: {e}")
+            
     await message.continue_propagation()
     
 async def forces_sub(client, message):
+    if not Config.FORCE_SUB:
+        return
+        
     buttons = [[InlineKeyboardButton(text="📢 Join Update Channel 📢", url=f"https://t.me/{Config.FORCE_SUB}")]] 
     text = "**Pʟᴇᴀꜱᴇ Jᴏɪɴ Oᴜʀ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ Tᴏ Cᴄᴏɴᴛɪɴᴜᴇ**"
 
@@ -66,12 +80,15 @@ async def forces_sub(client, message):
         user = await client.get_chat_member(Config.FORCE_SUB, message.from_user.id)
         if user.status == enums.ChatMemberStatus.BANNED:
             return await message.reply_text("Sᴏʀʀy Yᴏᴜ'ʀᴇ Bᴀɴɴᴇᴅ Tᴏ Uꜱᴇ Mᴇ")
-        elif user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR]:
+        # Included OWNER check so the bot owner isn't constantly told to subscribe to their own channel
+        elif user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
             return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
     except UserNotParticipant:
         return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
-    return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
-    
+    except Exception as e:
+        print(f"Force Sub Error: {e}")
+        return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+
 # (c) @RknDeveloperr
 # Rkn Developer 
 # Don't Remove Credit 😔
