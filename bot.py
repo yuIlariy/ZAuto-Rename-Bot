@@ -46,6 +46,7 @@ from pyrogram import idle
 from config import Config
 from plugins.web_support import web_server
 from plugins.file_rename import app
+from helper.database import digital_botz # <-- ADDED DATABASE IMPORT
 
 # Get logging configurations
 logging.basicConfig(
@@ -132,6 +133,10 @@ digital_instance = DigitalAutoRenameBot()
 
 def main():
     async def start_services():
+        # --- BEANIE ODM INITIALIZATION HOOK ---
+        await digital_botz.init_db()
+        # --------------------------------------
+
         if Config.STRING_SESSION:
             await asyncio.gather(app.start(), digital_instance.start())
         else:
