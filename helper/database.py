@@ -9,27 +9,12 @@
 """
 Apache License 2.0
 Copyright (c) 2025 @Digital_Botz
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 # database imports
 import datetime, time
 from typing import Optional, List
-import motor.motor_asyncio
+from pymongo import AsyncMongoClient # <--- THE FIX (Replaced motor)
 from pydantic import BaseModel, Field
 from beanie import Document, init_beanie
 from config import Config
@@ -89,7 +74,8 @@ class Database:
         
     async def init_db(self):
         """Must be called during bot startup to initialize Beanie"""
-        self._client = motor.motor_asyncio.AsyncIOMotorClient(self.uri)
+        # <--- THE FIX: Using PyMongo's native AsyncClient
+        self._client = AsyncMongoClient(self.uri)
         self.db = self._client[self.database_name]
         # Initialize the Models
         await init_beanie(database=self.db, document_models=[User, BotStats, Task])
@@ -305,9 +291,3 @@ class Database:
         await Task.find(Task.user_id == user_id).delete()
 
 digital_botz = Database(Config.DB_URL, Config.DB_NAME)
-
-# Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
-# Update Channel @Digital_Botz & @DigitalBotz_Support
