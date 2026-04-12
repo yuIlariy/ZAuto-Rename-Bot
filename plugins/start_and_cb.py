@@ -22,6 +22,8 @@ from helper.database import digital_botz
 from config import Config, rkn
 from helper.utils import humanbytes
 from plugins import __version__ as _bot_version_, __developer__, __database__, __library__, __language__, __programer__
+# --- IMPORT FORCE SUB ---
+from plugins.force_sub import forces_sub 
 
 # --- GLOBAL VARIABLES FOR NETWORK STATS ---
 STATS_STARTED = False
@@ -161,6 +163,13 @@ async def plans_cmd(client, message):
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
+    # --- EXACT POINT OF FIX: ENFORCE SUBSCRIPTION HERE ---
+    if Config.FORCE_SUB:
+        is_forced = await forces_sub(client, message)
+        if is_forced:
+            return  # Stop execution if they haven't joined
+    # -----------------------------------------------------
+
     global STATS_STARTED
     if not STATS_STARTED:
         asyncio.create_task(stats_loop())
