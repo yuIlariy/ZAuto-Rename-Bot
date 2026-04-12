@@ -1,6 +1,8 @@
 pyrofork==2.3.69
 TgCrypto-pyrofork==1.2.8
-motor==3.7.1
+pymongo>=4.16.0
+beanie>=2.1.0
+pydantic>=2.12.5
 dnspython==2.8.0
 hachoir==3.3.0
 Pillow==12.1.0
@@ -9,4 +11,3 @@ pytz==2025.2
 psutil==7.2.1
 ffmpeg-python
 ffmpeg
-beanie pydantic
