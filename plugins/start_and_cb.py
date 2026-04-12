@@ -22,8 +22,6 @@ from helper.database import digital_botz
 from config import Config, rkn
 from helper.utils import humanbytes
 from plugins import __version__ as _bot_version_, __developer__, __database__, __library__, __language__, __programer__
-# --- IMPORT FORCE SUB ---
-from plugins.force_sub import forces_sub 
 
 # --- GLOBAL VARIABLES FOR NETWORK STATS ---
 STATS_STARTED = False
@@ -101,17 +99,14 @@ async def myplan_cmd(client, message):
     if is_premium:
         expiry_str = user_data.get('premium_expiry')
         if expiry_str:
-            # Parse the exact expiry timestamp
             try:
                 expiry_datetime = datetime.datetime.fromisoformat(expiry_str)
             except ValueError:
-                # Fallback just in case they have an old 'date-only' format saved
                 expiry_date = datetime.date.fromisoformat(expiry_str)
                 expiry_datetime = datetime.datetime.combine(expiry_date, datetime.time(23, 59, 59))
                 
             now = datetime.datetime.now()
             
-            # Calculate the time difference
             diff = expiry_datetime - now
             if diff.total_seconds() > 0:
                 days = diff.days
@@ -142,7 +137,6 @@ async def myplan_cmd(client, message):
         await message.reply_text(text)
     
     else:
-        # Free User logic
         text = (
             "**ℹ️ Yᴏᴜʀ Cᴜʀʀᴇɴᴛ Pʟᴀɴ Dᴇᴛᴀɪʟꜱ**\n\n"
             f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
@@ -163,13 +157,6 @@ async def plans_cmd(client, message):
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
-    # --- EXACT POINT OF FIX: ENFORCE SUBSCRIPTION HERE ---
-    if Config.FORCE_SUB:
-        is_forced = await forces_sub(client, message)
-        if is_forced:
-            return  # Stop execution if they haven't joined
-    # -----------------------------------------------------
-
     global STATS_STARTED
     if not STATS_STARTED:
         asyncio.create_task(stats_loop())
@@ -186,7 +173,6 @@ async def start(client, message):
         ]]
         
     user = message.from_user
-    await digital_botz.add_user(client, message) 
     if Config.RKN_PIC:
         await message.reply_photo(Config.RKN_PIC, caption=rkn.START_TXT.format(user.mention), reply_markup=InlineKeyboardMarkup(start_button))    
     else:
@@ -248,9 +234,8 @@ async def cb_handler(client, query: CallbackQuery):
         real_users = await digital_botz.total_users_count()
         total_users = real_users + 1009
         
-        # Fake the Premium Count for the button stats (Magic Boost)
         real_prem = await digital_botz.total_premium_users_count()
-        total_premium_users = real_prem + 64 # Magic Boost for premium users
+        total_premium_users = real_prem + 64 
         
         uptime = get_uptime(client.uptime)
         db_stats = await digital_botz.get_network_stats()
