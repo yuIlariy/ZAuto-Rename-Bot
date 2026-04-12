@@ -63,7 +63,7 @@ async def global_message_gatekeeper(client, message):
                 raise UserNotParticipant
         except UserNotParticipant:
             buttons = [[InlineKeyboardButton(text="📢 Jᴏɪɴ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ 📢", url=f"https://t.me/{Config.FORCE_SUB}")]]
-            text = "**⚠️ Pʟᴇᴀꜱᴇ Jᴏɪɴ Oᴜʀ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ Tᴏ Cᴏɴᴛɪɴᴜᴇ Uꜱɪɴɢ Mᴇ!**\n\n_Join the channel then send your file or command again._"
+            text = "**⚠️ Access Denied!\n\nTo use this bot, you must be a member of our updates channel. Join to stay updated with server status and new features!**\n\nJoin the channel then send your file or command again."
             await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
             raise StopPropagation # Kills the process here, file rename will NEVER trigger
         except StopPropagation:
