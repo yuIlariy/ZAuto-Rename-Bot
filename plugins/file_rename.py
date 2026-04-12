@@ -40,11 +40,49 @@ app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH
 
 renamer = EnhancedAutoRenamer()
 
-# --- GLOBAL QUEUES ---
-USER_QUEUE = {} 
-UPLOAD_QUEUE = {}
-WORKERS = {}
-# ---------------------
+# ==========================================
+# --- QUEUE MANAGER CLASS ---
+# ==========================================
+class QueueManager:
+    """Manages user tasks, upload queues, and worker states to prevent memory leaks."""
+    def __init__(self):
+        self.user_tasks = {}    # user_id -> list of messages to download
+        self.upload_queues = {} # user_id -> asyncio.Queue for ready uploads
+        self.workers = {}       # user_id -> dict of running async tasks
+
+    def add_task(self, user_id, message):
+        """Adds a message to the user's download queue."""
+        if user_id not in self.user_tasks:
+            self.user_tasks[user_id] = []
+        self.user_tasks[user_id].append(message)
+        return len(self.user_tasks[user_id])
+
+    def has_worker(self, user_id):
+        """Checks if there are active background workers for this user."""
+        return user_id in self.workers
+
+    def init_upload_queue(self, user_id):
+        """Initializes an asyncio Queue for the user's uploads."""
+        if user_id not in self.upload_queues:
+            self.upload_queues[user_id] = asyncio.Queue()
+        return self.upload_queues[user_id]
+
+    def register_workers(self, user_id, dl_task, ul_task):
+        """Registers the active asyncio tasks for tracking."""
+        self.workers[user_id] = {'dl': dl_task, 'ul': ul_task}
+
+    def cleanup(self, user_id):
+        """Safely removes all traces of a user from memory once their queue is empty."""
+        if user_id in self.workers:
+            del self.workers[user_id]
+        if user_id in self.upload_queues:
+            del self.upload_queues[user_id]
+        if user_id in self.user_tasks:
+            del self.user_tasks[user_id]
+
+# Initialize the manager
+manager = QueueManager()
+# ==========================================
 
 @Client.on_message(filters.private & (filters.audio | filters.document | filters.video))
 async def rename_start(client, message):
@@ -52,7 +90,6 @@ async def rename_start(client, message):
     rkn_file = getattr(message, message.media.value)
     
     # --- PREMIUM & LIMIT CHECKS ---
-    # Check if user is premium (handles expiry automatically)
     is_premium = await digital_botz.check_premium(user_id)
     
     # 1. Check File Size (Max 2GB for Free Users)
@@ -78,31 +115,26 @@ async def rename_start(client, message):
             )
     # ------------------------------
 
-    # 1. Initialize Queue for User
-    if user_id not in USER_QUEUE:
-        USER_QUEUE[user_id] = []
+    # 1. Add Message to Queue Manager
+    pos = manager.add_task(user_id, message)
     
-    # 2. Add Message to Queue
-    USER_QUEUE[user_id].append(message)
-    
-    # 3. Check if Workers are already running
-    if user_id in WORKERS:
-        pos = len(USER_QUEUE[user_id])
+    # 2. Check if Workers are already running
+    if manager.has_worker(user_id):
         await message.reply_text(f"✅ **Added to Queue!**\nPosition: {pos}", quote=True)
         return
 
-    # 4. Start Workers
-    if user_id not in UPLOAD_QUEUE:
-        UPLOAD_QUEUE[user_id] = asyncio.Queue()
+    # 3. Initialize Upload Queue and Start Workers
+    manager.init_upload_queue(user_id)
         
     dl_task = asyncio.create_task(download_worker(client, user_id))
     ul_task = asyncio.create_task(upload_worker(client, user_id))
-    WORKERS[user_id] = {'dl': dl_task, 'ul': ul_task}
+    
+    manager.register_workers(user_id, dl_task, ul_task)
 
 async def download_worker(client, user_id):
     try:
-        while user_id in USER_QUEUE and USER_QUEUE[user_id]:
-            # Sort Queue by Season/Episode for series
+        while user_id in manager.user_tasks and manager.user_tasks[user_id]:
+            # Sort Queue by Season/Episode if applicable
             def get_sort_key(msg):
                 try:
                     file_val = getattr(msg, msg.media.value)
@@ -112,8 +144,8 @@ async def download_worker(client, user_id):
                     return (s, e)
                 except: return (999, 999)
 
-            USER_QUEUE[user_id].sort(key=get_sort_key)
-            message = USER_QUEUE[user_id].pop(0)
+            manager.user_tasks[user_id].sort(key=get_sort_key)
+            message = manager.user_tasks[user_id].pop(0)
             
             try:
                 rkn_file = getattr(message, message.media.value)
@@ -135,7 +167,7 @@ async def download_worker(client, user_id):
                 if not os.path.isdir("Renames"): os.makedirs("Renames", exist_ok=True)
                 file_path = f"Renames/{new_filename}"
 
-                # Download
+                # Download Process
                 await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
                 dl_path = await client.download_media(
                     message=message, 
@@ -144,7 +176,7 @@ async def download_worker(client, user_id):
                     progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
                 )
 
-                # Metadata & Thumbnail logic
+                # Metadata & Thumbnail Setup
                 duration = 0
                 try:
                     parser = createParser(file_path)
@@ -164,6 +196,7 @@ async def download_worker(client, user_id):
                 elif getattr(rkn_file, 'thumbs', None):
                     ph_path = await client.download_media(rkn_file.thumbs[0].file_id)
 
+                # Determine Upload Type
                 upload_type = "document"
                 if message.media == MessageMediaType.VIDEO: upload_type = "video"
                 elif message.media == MessageMediaType.AUDIO: upload_type = "audio"
@@ -176,22 +209,29 @@ async def download_worker(client, user_id):
                     'upload_type': upload_type, 'file_size': rkn_file.file_size, 'user_id': user_id
                 }
                 
-                await UPLOAD_QUEUE[user_id].put(upload_data)
+                # Push to Upload Queue
+                await manager.upload_queues[user_id].put(upload_data)
                 
             except Exception as e:
                 print(f"Download Error: {e}")
 
             await asyncio.sleep(1)
     finally:
-        await UPLOAD_QUEUE[user_id].put(None)
+        # Sentinel to signal upload worker to finish
+        if user_id in manager.upload_queues:
+            await manager.upload_queues[user_id].put(None)
 
 async def upload_worker(client, user_id):
     try:
         while True:
-            data = await UPLOAD_QUEUE[user_id].get()
+            # Safely get data from the queue manager
+            if user_id not in manager.upload_queues:
+                break
+                
+            data = await manager.upload_queues[user_id].get()
             if data is None: break
                 
-            # Choose correct client (Session for files > 2GB)
+            # Use Session Client for files > 2GB (for Premium/Admin)
             uploader = app if (Config.STRING_SESSION and data['file_size'] > 2000 * 1024 * 1024) else client
             
             try:
@@ -204,7 +244,7 @@ async def upload_worker(client, user_id):
                 )
 
                 if not error:
-                    # UPDATE DAILY LIMIT FOR FREE USERS
+                    # Update database with file size for daily limit tracking
                     is_premium = await digital_botz.check_premium(user_id)
                     if not is_premium:
                         await digital_botz.update_daily_limit(user_id, data['file_size'])
@@ -216,13 +256,15 @@ async def upload_worker(client, user_id):
                     await asyncio.sleep(2)
                     await data['rkn_processing'].delete()
 
+            except Exception as e:
+                print(f"Upload task failed: {e}")
+
             finally:
                 await remove_path(data['ph_path'], data['file_path'])
             
     finally:
-        if user_id in WORKERS: del WORKERS[user_id]
-        if user_id in UPLOAD_QUEUE: del UPLOAD_QUEUE[user_id]
-        if user_id in USER_QUEUE: del USER_QUEUE[user_id]
+        # Cleanly wipe the user from memory once all tasks are done
+        manager.cleanup(user_id)
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing):
     try:
