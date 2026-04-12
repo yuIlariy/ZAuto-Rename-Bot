@@ -10,50 +10,32 @@ copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Telegram Link : https://t.me/Digital_Botz 
-Repo Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot
-License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/LICENSE
 """
 
 # pyrogram imports
 from pyrogram import Client, filters, enums 
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserNotParticipant
+from pyrogram import StopPropagation # <--- The Magic Kill Switch
 
 # extra imports
 from config import Config
 from helper.database import digital_botz
 import datetime 
 
-async def not_subscribed(_, client, message):
-    await digital_botz.add_user(client, message)
-    if not Config.FORCE_SUB:
-        return False
-
-    try:
-        user = await client.get_chat_member(Config.FORCE_SUB, message.from_user.id)
-        return user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
-    except UserNotParticipant:
-        return True
-    except Exception as e:
-        print(f"Error checking subscription: {e}")
-        return False
-
-async def handle_banned_user_status(bot, message):
-    await digital_botz.add_user(bot, message) 
+# ==========================================
+# --- GLOBAL MESSAGE GATEKEEPER ---
+# Runs at group=-1 (Before ANY other command or file upload)
+# ==========================================
+@Client.on_message(filters.private & filters.incoming, group=-1)
+async def global_message_gatekeeper(client, message):
     user_id = message.from_user.id
+    await digital_botz.add_user(client, message)
+
+    # --- 1. BAN CHECK ---
     ban_status = await digital_botz.get_ban_status(user_id)
-    
     if ban_status.get("is_banned", False):
         try:
-            # Safely handle both the new datetime format and the old date-only format
             banned_on_str = ban_status["banned_on"]
             if "T" in banned_on_str or ":" in banned_on_str:
                 banned_on = datetime.datetime.fromisoformat(banned_on_str).date()
@@ -63,35 +45,64 @@ async def handle_banned_user_status(bot, message):
             if (datetime.date.today() - banned_on).days > ban_status.get("ban_duration", 0):
                 await digital_botz.remove_ban(user_id)
             else:
-                return await message.reply_text("Sorry, 😔 You are Banned!.. Please Contact - @xspes") 
+                await message.reply_text("🚫 **Sᴏʀʀy, Yᴏᴜ ᴀʀᴇ Bᴀɴɴᴇᴅ!**\n\nPlease Contact Admin: @xspes") 
+                raise StopPropagation # Kills the process here
+        except StopPropagation:
+            raise
         except Exception as e:
             print(f"Error checking ban status: {e}")
-            
-    await message.continue_propagation()
-    
-async def forces_sub(client, message):
-    if not Config.FORCE_SUB:
+
+    # --- 2. FORCE SUB CHECK ---
+    if Config.FORCE_SUB:
+        try:
+            user = await client.get_chat_member(Config.FORCE_SUB, user_id)
+            if user.status == enums.ChatMemberStatus.BANNED:
+                await message.reply_text("🚫 **Sᴏʀʀy, Yᴏᴜ ᴀʀᴇ Bᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ!**")
+                raise StopPropagation
+            elif user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                raise UserNotParticipant
+        except UserNotParticipant:
+            buttons = [[InlineKeyboardButton(text="📢 Jᴏɪɴ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ 📢", url=f"https://t.me/{Config.FORCE_SUB}")]]
+            text = "**⚠️ Pʟᴇᴀꜱᴇ Jᴏɪɴ Oᴜʀ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ Tᴏ Cᴏɴᴛɪɴᴜᴇ Uꜱɪɴɢ Mᴇ!**\n\n_Join the channel then send your file or command again._"
+            await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+            raise StopPropagation # Kills the process here, file rename will NEVER trigger
+        except StopPropagation:
+            raise
+        except Exception as e:
+            print(f"Force Sub Error: {e}")
+
+
+# ==========================================
+# --- GLOBAL BUTTON (CALLBACK) GATEKEEPER ---
+# Runs at group=-1 (Secures all inline button clicks)
+# ==========================================
+@Client.on_callback_query(group=-1)
+async def global_cb_gatekeeper(client, query):
+    # Let them click "Close" on error messages without being blocked
+    if query.data == "close":
         return
         
-    buttons = [[InlineKeyboardButton(text="📢 Join Update Channel 📢", url=f"https://t.me/{Config.FORCE_SUB}")]] 
-    text = "**Pʟᴇᴀꜱᴇ Jᴏɪɴ Oᴜʀ Uᴩᴅᴀᴛᴇ Cʜᴀɴɴᴇʟ Tᴏ Cᴄᴏɴᴛɪɴᴜᴇ**"
+    user_id = query.from_user.id
+    
+    # --- 1. BAN CHECK ---
+    ban_status = await digital_botz.get_ban_status(user_id)
+    if ban_status.get("is_banned", False):
+        await query.answer("🚫 You are Banned! Contact Admin.", show_alert=True)
+        raise StopPropagation
+        
+    # --- 2. FORCE SUB CHECK ---
+    if Config.FORCE_SUB:
+        try:
+            user = await client.get_chat_member(Config.FORCE_SUB, user_id)
+            if user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                raise UserNotParticipant
+        except UserNotParticipant:
+            await query.answer("⚠️ Please Join the Update Channel first!", show_alert=True)
+            raise StopPropagation
+        except StopPropagation:
+            raise
+        except Exception as e:
+            pass
 
-    try:
-        user = await client.get_chat_member(Config.FORCE_SUB, message.from_user.id)
-        if user.status == enums.ChatMemberStatus.BANNED:
-            return await message.reply_text("Sᴏʀʀy Yᴏᴜ'ʀᴇ Bᴀɴɴᴇᴅ Tᴏ Uꜱᴇ Mᴇ")
-        # Included OWNER check so the bot owner isn't constantly told to subscribe to their own channel
-        elif user.status not in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
-            return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
-    except UserNotParticipant:
-        return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
-    except Exception as e:
-        print(f"Force Sub Error: {e}")
-        return await message.reply_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
-
-# (c) @RknDeveloperr
 # Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
 # Update Channel @Digital_Botz & @DigitalBotz_Support
