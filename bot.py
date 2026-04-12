@@ -45,8 +45,9 @@ from pyrogram import idle
 # bots imports
 from config import Config
 from plugins.web_support import web_server
-from plugins.file_rename import app
-from helper.database import digital_botz # <-- ADDED DATABASE IMPORT
+# --- IMPORTED resume_all_tasks BELOW ---
+from plugins.file_rename import app, resume_all_tasks
+from helper.database import digital_botz 
 
 # Get logging configurations
 logging.basicConfig(
@@ -142,6 +143,10 @@ def main():
         else:
             await asyncio.gather(digital_instance.start())
         
+        # --- RESUME STUCK TASKS FROM MONGODB ---
+        await resume_all_tasks(digital_instance)
+        # ---------------------------------------
+
         # Idle mode start karo
         await idle()
         
