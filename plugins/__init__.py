@@ -25,7 +25,6 @@ Repo Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot
 License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/LICENSE
 """
 
-
 __name__ = "Digital-Auto-Rename-Bot"
 __version__ = "3.1.0"
 __license__ = " Apache License, Version 2.0"
@@ -39,7 +38,6 @@ __maindeveloper__ = "<a href=https://t.me/RknDeveloper>RknDeveloper</a>"
 
 # main copyright herders (©️)
 # I have been working on this repo since 2025
-
 
 # main working files 
 # - bot.py
@@ -60,14 +58,3 @@ __maindeveloper__ = "<a href=https://t.me/RknDeveloper>RknDeveloper</a>"
 # - Dockerfile
 # - requirements.txt
 # - runtime.txt
-
-#from plugins.force_sub import not_subscribed, forces_sub, handle_banned_user_status
-from pyrogram import Client, filters
-
-@Client.on_message(filters.private)
-async def _(bot, message):
-    await handle_banned_user_status(bot, message)
-    
-@Client.on_message(filters.private & filters.create(not_subscribed))
-async def forces_sub_handler(bot, message):
-    await forces_sub(bot, message)
