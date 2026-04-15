@@ -132,6 +132,35 @@ class DigitalAutoRenameBot(Client):
 
 digital_instance = DigitalAutoRenameBot()
 
+# ==========================================
+# --- 24 HOUR EXPIRY NOTIFIER TASK ---
+# ==========================================
+async def premium_expiry_notifier(client):
+    """Runs in the background and warns users 24h before expiry"""
+    while True:
+        try:
+            expiring_users = await digital_botz.get_expiring_users()
+            for user in expiring_users:
+                try:
+                    await client.send_message(
+                        chat_id=user.id,
+                        text=(
+                            "⚠️ **Premium Expiring Soon!** ⚠️\n\n"
+                            "Your Premium Plan will expire in less than **24 Hours**.\n"
+                            "To ensure uninterrupted high-speed renaming and 4GB+ uploads, please renew your plan.\n\n"
+                            "👉 Use /myplan to check details and contact Admin to renew!"
+                        )
+                    )
+                    await digital_botz.mark_notified(user.id)
+                    await asyncio.sleep(1) # Prevent flood waits
+                except Exception as e:
+                    print(f"Could not notify {user.id}: {e}")
+        except Exception as e:
+            print(f"Notifier error: {e}")
+        
+        # Check the database again every 1 hour (3600 seconds)
+        await asyncio.sleep(3600)
+
 def main():
     async def start_services():
         # --- BEANIE ODM INITIALIZATION HOOK ---
@@ -146,6 +175,10 @@ def main():
         # --- RESUME STUCK TASKS FROM MONGODB ---
         await resume_all_tasks(digital_instance)
         # ---------------------------------------
+
+        # --- START PREMIUM EXPIRY NOTIFIER ---
+        asyncio.create_task(premium_expiry_notifier(digital_instance))
+        # -------------------------------------
 
         # Idle mode start karo
         await idle()
