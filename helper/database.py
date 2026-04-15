@@ -36,6 +36,7 @@ class User(Document):
     format_template: str = "{filename}"
     is_premium: bool = False
     premium_expiry: Optional[str] = None
+    notified_24h: bool = False  # <--- NEW: Flag for 24-hour expiry notification
     daily_upload_bytes: int = 0
     last_upload_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
     ban_status: BanStatus = Field(default_factory=BanStatus)
@@ -203,6 +204,7 @@ class Database:
             user.is_premium = True
             expiry = datetime.datetime.now() + datetime.timedelta(days=days)
             user.premium_expiry = expiry.isoformat()
+            user.notified_24h = False # <--- NEW: Reset the notification flag when renewed
             await user.save()
         
     async def remove_premium(self, user_id: int):
@@ -210,6 +212,7 @@ class Database:
         if user:
             user.is_premium = False
             user.premium_expiry = None
+            user.notified_24h = False
             await user.save()
 
     async def check_premium(self, user_id: int):
@@ -228,6 +231,7 @@ class Database:
                     # Subscription expired
                     user.is_premium = False
                     user.premium_expiry = None
+                    user.notified_24h = False
                     await user.save()
                     return False
             return True 
@@ -258,6 +262,38 @@ class Database:
             
         user.daily_upload_bytes += file_size
         await user.save()
+
+    # ==========================================
+    # --- 24-HOUR EXPIRY NOTIFICATION UTILS ---
+    # ==========================================
+    async def get_expiring_users(self):
+        """Fetches users who expire in the next 24 hours and haven't been notified"""
+        now = datetime.datetime.now()
+        target_time = now + datetime.timedelta(hours=24)
+        
+        expiring_users = []
+        # Find premium users who haven't received their 24h warning yet
+        users = await User.find(User.is_premium == True, User.notified_24h == False).to_list()
+        
+        for user in users:
+            if user.premium_expiry:
+                try:
+                    expiry_dt = datetime.datetime.fromisoformat(user.premium_expiry)
+                except ValueError:
+                    expiry_dt = datetime.datetime.combine(datetime.date.fromisoformat(user.premium_expiry), datetime.time.max)
+                
+                # Check if the expiry is within the 24-hour window
+                if now < expiry_dt <= target_time:
+                    expiring_users.append(user)
+                    
+        return expiring_users
+
+    async def mark_notified(self, user_id: int):
+        """Marks the user so they don't get spammed every hour"""
+        user = await User.get(user_id)
+        if user:
+            user.notified_24h = True
+            await user.save()
 
     # ==========================================
     # --- PERSISTENT QUEUE (TASK) FUNCTIONS ---
