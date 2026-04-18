@@ -78,6 +78,7 @@ async def add_premium_user(bot, message):
         await message.reply_text(
             "⚠️ **Usage:** `/addprem user_id [days]`\n\n"
             "Example for 1 Month: `/addprem 123456789 30`\n"
+            "Example for Lifetime: `/addprem 123456789 0`\n"
             "If days are not provided, it defaults to 30 days."
         )
         return
@@ -90,14 +91,18 @@ async def add_premium_user(bot, message):
             return await message.reply_text("⚠️ User not found in database. They need to start the bot first.")
 
         await digital_botz.add_premium(user_id, days)
-        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium for {days} days!**")
+        
+        # LIFETIME FIX: Determine dynamic text based on days
+        plan_text = "Lifetime ♾️" if days == 0 else f"{days} days"
+        
+        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium for {plan_text}!**")
         
         # Try to notify the user
         try:
             await bot.send_message(
                 user_id, 
                 f"🎉 **Congratulations!**\n\n"
-                f"Your payment was successful! You have been upgraded to **Premium Status** for **{days} days**! 🌟\n\n"
+                f"Your payment was successful! You have been upgraded to **Premium Status** for **{plan_text}**! 🌟\n\n"
                 "**Premium Features Unlocked:**\n"
                 "• ♾️ No 6GB Daily Limit\n"
                 "• 🚀 Upload files larger than 2GB\n"
