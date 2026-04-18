@@ -154,7 +154,7 @@ async def log_file(b, m):
     except Exception as e:
         await m.reply(str(e))
 
-# Restart to cancell all process 
+# Restart to cancel all process 
 @Client.on_message(filters.private & filters.command("restart") & filters.user(Config.ADMIN))
 async def restart_bot(b, m):
     rkn = await b.send_message(text="**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....**", chat_id=m.chat.id)
@@ -163,30 +163,43 @@ async def restart_bot(b, m):
     deactivated = 0
     blocked = 0
     start_time = time.time()
-    total_users = await digital_botz.total_users_count()
-    all_users = await digital_botz.get_all_users()
-    async for user in all_users:
-        try:
-            restart_msg = f"ʜᴇʏ, {(await b.get_users(user['_id'])).mention}\n\n**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....\n\n✅️ ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛᴇᴅ. ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ.**"
-            await b.send_message(user['_id'], restart_msg)
-            success += 1
-        except InputUserDeactivated:
-            deactivated +=1
-            await digital_botz.delete_user(user['_id'])
-        except UserIsBlocked:
-            blocked +=1
-            await digital_botz.delete_user(user['_id'])
-        except Exception as e:
-            failed += 1
-            await digital_botz.delete_user(user['_id'])
-            print(e)
-            pass
-        try:
-            await rkn.edit(f"<u>ʀᴇsᴛᴀʀᴛ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ:</u>\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-    completed_restart = datetime.timedelta(seconds=int(time.time() - start_time))
-    await rkn.edit(f"ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʀᴇsᴛᴀʀᴛ: {completed_restart}\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+    
+    try:
+        total_users = await digital_botz.total_users_count()
+        all_users = await digital_botz.get_all_users()
+        
+        # FIXED: Changed async for to standard for loop
+        for user in all_users:
+            user_id = user.get('_id', user.get('id'))
+            if not user_id:
+                continue
+                
+            try:
+                restart_msg = f"ʜᴇʏ, {(await b.get_users(user_id)).mention}\n\n**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....\n\n✅️ ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛᴇᴅ. ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ.**"
+                await b.send_message(user_id, restart_msg)
+                success += 1
+            except InputUserDeactivated:
+                deactivated +=1
+                await digital_botz.delete_user(user_id)
+            except UserIsBlocked:
+                blocked +=1
+                await digital_botz.delete_user(user_id)
+            except Exception as e:
+                failed += 1
+                pass
+                
+            try:
+                if (success + failed + deactivated + blocked) % 50 == 0:
+                    await rkn.edit(f"<u>ʀᴇsᴛᴀʀᴛ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ:</u>\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+                
+        completed_restart = datetime.timedelta(seconds=int(time.time() - start_time))
+        await rkn.edit(f"ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʀᴇsᴛᴀʀᴛ: {completed_restart}\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        await rkn.edit(f"⚠️ **Critical Error during Restart:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
+        
     os.execl(sys.executable, sys.executable, *sys.argv)
 
 @Client.on_message(filters.private & filters.command("ban") & filters.user(Config.ADMIN))
@@ -214,8 +227,7 @@ async def ban(c: Client, m: Message):
             )
             ban_log_text += '\n\nUser notified successfully!'
         except:
-            traceback.print_exc()
-            ban_log_text += f"\n\nUser notification failed! \n\n`{traceback.format_exc()}`"
+            ban_log_text += f"\n\nUser notification failed (user may have blocked the bot)."
 
         await digital_botz.ban_user(user_id, ban_duration, ban_reason)
         await m.reply_text(ban_log_text, quote=True)
@@ -245,8 +257,8 @@ async def unban(c: Client, m: Message):
             await c.send_message(user_id, f"Your ban was lifted!")
             unban_log_text += '\n\nUser notified successfully!'
         except:
-            traceback.print_exc()
-            unban_log_text += f"\n\nUser notification failed! \n\n`{traceback.format_exc()}`"
+            unban_log_text += f"\n\nUser notification failed!"
+            
         await digital_botz.remove_ban(user_id)
         await m.reply_text(unban_log_text, quote=True)
     except:
@@ -259,51 +271,90 @@ async def unban(c: Client, m: Message):
 
 @Client.on_message(filters.private & filters.command("banned_users") & filters.user(Config.ADMIN))
 async def _banned_users(_, m: Message):
-    all_banned_users = await digital_botz.get_all_banned_users()
-    banned_usr_count = 0
-    text = ''
-    async for banned_user in all_banned_users:
-        user_id = banned_user['id']
-        ban_duration = banned_user['ban_status']['ban_duration']
-        banned_on = banned_user['ban_status']['banned_on']
-        ban_reason = banned_user['ban_status']['ban_reason']
-        banned_usr_count += 1
-        text += f"> **user_id**: `{user_id}`, **Ban Duration**: `{ban_duration}`, " \
-                f"**Banned on**: `{banned_on}`, **Reason**: `{ban_reason}`\n\n"
-    reply_text = f"Total banned user(s): `{banned_usr_count}`\n\n{text}"
-    if len(reply_text) > 4096:
-        with open('banned-users.txt', 'w') as f:
-            f.write(reply_text)
-        await m.reply_document('banned-users.txt', True)
-        os.remove('banned-users.txt')
-        return
-    await m.reply_text(reply_text, True)
+    try:
+        all_banned_users = await digital_botz.get_all_banned_users()
+        banned_usr_count = 0
+        text = ''
+        
+        # FIXED: Changed async for to standard for loop and added dict `.get` safety
+        for banned_user in all_banned_users:
+            user_id = banned_user.get('_id', banned_user.get('id'))
+            ban_status = banned_user.get('ban_status', {})
+            ban_duration = ban_status.get('ban_duration', 0)
+            banned_on = ban_status.get('banned_on', 'Unknown')
+            ban_reason = ban_status.get('ban_reason', 'None')
+            banned_usr_count += 1
+            text += f"> **user_id**: `{user_id}`, **Ban Duration**: `{ban_duration}`, " \
+                    f"**Banned on**: `{banned_on}`, **Reason**: `{ban_reason}`\n\n"
+                    
+        reply_text = f"Total banned user(s): `{banned_usr_count}`\n\n{text}"
+        
+        if len(reply_text) > 4096:
+            with open('banned-users.txt', 'w') as f:
+                f.write(reply_text)
+            await m.reply_document('banned-users.txt', True)
+            os.remove('banned-users.txt')
+            return
+            
+        await m.reply_text(reply_text, True)
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        await m.reply_text(f"⚠️ **Error Fetching Banned Users:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
 
      
-@Client.on_message(filters.command("broadcast") & filters.user(Config.ADMIN) & filters.reply)
+# FIXED: Removed filters.reply to ensure the command is caught
+@Client.on_message(filters.command("broadcast") & filters.user(Config.ADMIN))
 async def broadcast_handler(bot: Client, m: Message):
-    await bot.send_message(Config.LOG_CHANNEL, f"{m.from_user.mention} or {m.from_user.id} Iꜱ ꜱᴛᴀʀᴛᴇᴅ ᴛʜᴇ Bʀᴏᴀᴅᴄᴀꜱᴛ......")
-    all_users = await digital_botz.get_all_users()
-    broadcast_msg = m.reply_to_message
-    sts_msg = await m.reply_text("Bʀᴏᴀᴅᴄᴀꜱᴛ Sᴛᴀʀᴛᴇᴅ..!") 
-    done = 0
-    failed = 0
-    success = 0
-    start_time = time.time()
-    total_users = await digital_botz.total_users_count()
-    async for user in all_users:
-        sts = await send_msg(user['_id'], broadcast_msg)
-        if sts == 200:
-           success += 1
-        else:
-           failed += 1
-        if sts == 400:
-           await digital_botz.delete_user(user['_id'])
-        done += 1
-        if not done % 20:
-           await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Iɴ Pʀᴏɢʀᴇꜱꜱ: \nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users} \nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
-    completed_in = datetime.timedelta(seconds=int(time.time() - start_time))
-    await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Cᴏᴍᴩʟᴇᴛᴇᴅ: \nCᴏᴍᴩʟᴇᴛᴇᴅ Iɴ `{completed_in}`.\n\nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users}\nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+    # Explicitly check for reply here
+    if not m.reply_to_message:
+        return await m.reply_text("⚠️ **Please reply to a message (text, photo, or file) with `/broadcast` to send it to all users.**")
+
+    # Let the admin know it started immediately
+    sts_msg = await m.reply_text("🚀 **Bʀᴏᴀᴅᴄᴀꜱᴛ Sᴛᴀʀᴛᴇᴅ..! Fetching users...**") 
+
+    try:
+        # Protect log channel notification from crashing the script
+        try:
+            if Config.LOG_CHANNEL:
+                await bot.send_message(Config.LOG_CHANNEL, f"{m.from_user.mention} or {m.from_user.id} Iꜱ ꜱᴛᴀʀᴛᴇᴅ ᴛʜᴇ Bʀᴏᴀᴅᴄᴀꜱᴛ......")
+        except Exception as e:
+            logger.error(f"Log channel error during broadcast: {e}")
+            pass
+
+        all_users = await digital_botz.get_all_users()
+        broadcast_msg = m.reply_to_message
+        
+        done = 0
+        failed = 0
+        success = 0
+        start_time = time.time()
+        total_users = await digital_botz.total_users_count()
+        
+        # FIXED: Changed async for to standard for loop
+        for user in all_users:
+            user_id = user.get('_id', user.get('id'))
+            if not user_id:
+                continue
+                
+            sts = await send_msg(user_id, broadcast_msg)
+            if sts == 200:
+               success += 1
+            else:
+               failed += 1
+            if sts == 400:
+               await digital_botz.delete_user(user_id)
+               
+            done += 1
+            if not done % 20:
+               await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Iɴ Pʀᴏɢʀᴇꜱꜱ: \nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users} \nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+               
+        completed_in = datetime.timedelta(seconds=int(time.time() - start_time))
+        await sts_msg.edit(f"✅ Bʀᴏᴀᴅᴄᴀꜱᴛ Cᴏᴍᴩʟᴇᴛᴇᴅ: \nCᴏᴍᴩʟᴇᴛᴇᴅ Iɴ `{completed_in}`.\n\nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users}\nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+        
+    except Exception as e:
+        # Ultimate Failsafe: Will display exact error directly in telegram
+        traceback_str = traceback.format_exc()
+        await sts_msg.edit(f"⚠️ **Critical Error during Broadcast:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
            
 async def send_msg(user_id, message):
     try:
@@ -311,15 +362,12 @@ async def send_msg(user_id, message):
         return 200
     except FloodWait as e:
         await asyncio.sleep(e.value)
-        return send_msg(user_id, message)
+        return await send_msg(user_id, message)
     except InputUserDeactivated:
-        logger.info(f"{user_id} : Dᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ")
         return 400
     except UserIsBlocked:
-        logger.info(f"{user_id} : Bʟᴏᴄᴋᴇᴅ Tʜᴇ Bᴏᴛ")
         return 400
     except PeerIdInvalid:
-        logger.info(f"{user_id} : Uꜱᴇʀ Iᴅ Iɴᴠᴀʟɪᴅ")
         return 400
     except Exception as e:
         logger.error(f"{user_id} : {e}")
