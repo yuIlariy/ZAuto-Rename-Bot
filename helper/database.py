@@ -202,8 +202,14 @@ class Database:
         user = await User.get(user_id)
         if user:
             user.is_premium = True
-            expiry = datetime.datetime.now() + datetime.timedelta(days=days)
-            user.premium_expiry = expiry.isoformat()
+            
+            # THE LIFETIME FIX: If days is 0, make it permanent!
+            if days == 0:
+                user.premium_expiry = None
+            else:
+                expiry = datetime.datetime.now() + datetime.timedelta(days=days)
+                user.premium_expiry = expiry.isoformat()
+                
             user.notified_24h = False # <--- NEW: Reset the notification flag when renewed
             await user.save()
         
