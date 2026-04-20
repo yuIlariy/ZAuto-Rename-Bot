@@ -30,7 +30,7 @@ License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/
 """
 
 # extra imports
-import aiohttp, asyncio, warnings, pytz, datetime
+import os, aiohttp, asyncio, warnings, pytz, datetime
 import logging
 import logging.config
 import glob, sys
@@ -56,7 +56,12 @@ logging.basicConfig(
              logging.StreamHandler()]
 )
 #logger = logging.getLogger(__name__)
-logging.getLogger("pyrofork").setLevel(logging.WARNING)
+
+# --- LOGGING MUZZLES (Method 3) ---
+logging.getLogger("pyrofork").setLevel(logging.WARNING) # Kept untouched
+logging.getLogger("hachoir").setLevel(logging.ERROR)    # Silences the 2GB ZIP warnings
+logging.getLogger("aiohttp").setLevel(logging.ERROR)    # Silences routine web server logs
+# ----------------------------------
 
 class DigitalAutoRenameBot(Client):
     def __init__(self):
@@ -162,6 +167,19 @@ async def premium_expiry_notifier(client):
         await asyncio.sleep(3600)
 
 def main():
+    # ==========================================
+    # --- AUTO-CLEANER FOR LOG FILE (Method 1) ---
+    # ==========================================
+    LOG_FILE = "BotLog.txt"
+    MAX_LOG_SIZE = 10 * 1024 * 1024  # 10 MB Limit
+
+    if os.path.exists(LOG_FILE):
+        if os.path.getsize(LOG_FILE) > MAX_LOG_SIZE:
+            with open(LOG_FILE, "w") as f:
+                f.write(f"--- Log Auto-Cleared on {datetime.datetime.now()} ---\n")
+            print(f"🧹 {LOG_FILE} was over 10MB and has been wiped clean!")
+    # ==========================================
+
     async def start_services():
         # --- BEANIE ODM INITIALIZATION HOOK ---
         await digital_botz.init_db()
