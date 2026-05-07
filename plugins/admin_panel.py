@@ -3,370 +3,464 @@
 # Don't Remove Credit 😔
 # Telegram Channel @RknDeveloper & @Rkn_Botz
 # Developer @RknDeveloperr
-# Special Thanks To (https://github.com/JayMahakal98)
-# Update Channel @Digital_Botz & @DigitalBotz_Support
-
 """
 Apache License 2.0
 Copyright (c) 2025 @Digital_Botz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Telegram Link : https://t.me/Digital_Botz 
+Repo Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot
+License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/LICENSE
 """
 
-# database imports
-import datetime, time
-from typing import Optional, List
-from pymongo import AsyncMongoClient # <--- THE FIX (Replaced motor)
-from pydantic import BaseModel, Field
-from beanie import Document, init_beanie
+# extra imports
 from config import Config
+from helper.database import digital_botz
+from helper.utils import get_seconds, humanbytes
+import os, sys, time, asyncio, logging, datetime, pytz, traceback
 
-# ==========================================
-# --- BEANIE & PYDANTIC MODELS ---
-# ==========================================
-class BanStatus(BaseModel):
-    is_banned: bool = False
-    ban_duration: int = 0
-    banned_on: str = Field(default_factory=lambda: datetime.date.max.isoformat())
-    ban_reason: str = ""
+# pyrogram imports
+from pyrogram.types import Message
+from pyrogram import Client, filters
+from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
 
-class User(Document):
-    id: int = Field(alias="_id")
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+ 
+@Client.on_message(filters.command(["stats", "status"]) & filters.user(Config.ADMIN))
+async def get_stats(bot, message):
+    total_users = await digital_botz.total_users_count()
     
-    # --- LEADERBOARD DATA CACHE ---
-    first_name: Optional[str] = None
-    username: Optional[str] = None
-    lifetime_upload_bytes: int = 0
-    # ------------------------------
+    # Calculate Uptime Manually to avoid 24h reset
+    now = time.time()
+    diff = int(now - bot.uptime)
+    days, remainder = divmod(diff, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
     
-    file_id: Optional[str] = None
-    caption: Optional[str] = None
-    join_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
-    format_template: str = "{filename}"
-    is_premium: bool = False
-    premium_expiry: Optional[str] = None
-    notified_24h: bool = False  # <--- NEW: Flag for 24-hour expiry notification
-    daily_upload_bytes: int = 0
-    last_upload_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
-    ban_status: BanStatus = Field(default_factory=BanStatus)
+    # Format the string dynamically
+    uptime = ""
+    if days > 0:
+        uptime += f"{days}d "
+    if hours > 0 or days > 0:
+        uptime += f"{hours}h "
+    uptime += f"{minutes}m {seconds}s"
+    
+    # --- ACCURATE PREMIUM COUNT ---
+    total_premium_users = await digital_botz.total_premium_users_count()
 
-    class Settings:
-        name = "user"  # Target MongoDB Collection name
-
-class BotStats(Document):
-    id: str = Field(default="bot_stats", alias="_id")
-    start_time: float = Field(default_factory=time.time)
-    total_sent: int = 0
-    total_recv: int = 0
-    last_updated: float = Field(default_factory=time.time)
-
-    class Settings:
-        name = "stats"
-
-class Task(Document):
-    user_id: int
-    message_id: int
-    status: str = "pending"  # pending, processing
-    created_at: float = Field(default_factory=time.time)
-
-    class Settings:
-        name = "tasks"
+    start_t = time.time()
+    rkn = await message.reply('**ᴘʀᴏᴄᴇssɪɴɢ.....**')    
+    end_t = time.time()
+    time_taken_s = (end_t - start_t) * 1000
+    
+    await rkn.edit(text=f"**--Bᴏᴛ Sᴛᴀᴛᴜꜱ--** \n\n**⌚️ Bᴏᴛ Uᴩᴛɪᴍᴇ:** {uptime} \n**🐌 Cᴜʀʀᴇɴᴛ Pɪɴɢ:** `{time_taken_s:.3f} ᴍꜱ` \n**👭 Tᴏᴛᴀʟ Uꜱᴇʀꜱ:** `{total_users}`\n**💸 Tᴏᴛᴀʟ Pʀᴇᴍɪᴜᴍ Uꜱᴇʀꜱ:** `{total_premium_users}`")
 
 # ==========================================
-# --- DATABASE WRAPPER CLASS ---
+# --- LEADERBOARD COMMAND ---
 # ==========================================
-class Database:
-    def __init__(self, uri, database_name):
-        self.uri = uri
-        self.database_name = database_name
-        self._client = None
-        self.db = None
+@Client.on_message(filters.command(["top", "leaderboard"]) & filters.user(Config.ADMIN))
+async def leaderboard_cmd(bot, message):
+    lb_type = "lifetime"
+    if len(message.command) > 1 and message.command[1].lower() == "daily":
+        lb_type = "daily"
         
-    async def init_db(self):
-        """Must be called during bot startup to initialize Beanie"""
-        # <--- THE FIX: Using PyMongo's native AsyncClient
-        self._client = AsyncMongoClient(self.uri)
-        self.db = self._client[self.database_name]
-        # Initialize the Models
-        await init_beanie(database=self.db, document_models=[User, BotStats, Task])
-        print("✅ Database Layer Initialized via Beanie/Pydantic")
-
-    async def add_user(self, b, m):
-        from helper.utils import send_log
-        u = m.from_user
-        if not await self.is_user_exist(u.id):
-            user = User(id=u.id, first_name=u.first_name, username=u.username)
-            await user.insert()
-            await send_log(b, u)
-        else:
-            # Update username cache for the leaderboard if they changed it
-            user = await User.get(u.id)
-            if user and (getattr(user, "first_name", None) != u.first_name or getattr(user, "username", None) != u.username):
-                user.first_name = u.first_name
-                user.username = u.username
-                await user.save()
-
-    async def is_user_exist(self, id: int):
-        return await User.get(id) is not None
-
-    async def total_users_count(self):
-        return await User.count()
+    rkn = await message.reply('**📊 Fᴇᴛᴄʜɪɴɢ Lᴇᴀᴅᴇʀʙᴏᴀʀᴅ...**')
     
-    async def total_premium_users_count(self):
-        return await User.find(User.is_premium == True).count()
-
-    async def get_all_users(self):
-        # We return dicts to preserve backward compatibility with admin_panel loops
-        users = await User.find_all().to_list()
-        return [user.model_dump(by_alias=True) for user in users]
-
-    async def delete_user(self, user_id: int):
-        user = await User.get(user_id)
-        if user: await user.delete()
-
-    async def set_thumbnail(self, id: int, file_id: str):
-        user = await User.get(id)
-        if user:
-            user.file_id = file_id
-            await user.save()
-
-    async def get_thumbnail(self, id: int):
-        user = await User.get(id)
-        return user.file_id if user else None
-
-    async def set_caption(self, id: int, caption: str):
-        user = await User.get(id)
-        if user:
-            user.caption = caption
-            await user.save()
+    try:
+        # Fetch Top 20 from DB
+        users = await digital_botz.get_leaderboard(lb_type=lb_type, limit=20)
         
-    async def get_caption(self, id: int):
-        user = await User.get(id)
-        return user.caption if user else None
-
-    async def get_user_data(self, id: int) -> dict:
-        user = await User.get(id)
-        return user.model_dump(by_alias=True) if user else None
+        if not users:
+            return await rkn.edit("⚠️ **No data found for the leaderboard yet!**")
             
-    async def remove_ban(self, id: int):
-        user = await User.get(id)
-        if user:
-            user.ban_status = BanStatus()
-            await user.save()
-
-    async def ban_user(self, user_id: int, ban_duration: int, ban_reason: str):
-        user = await User.get(user_id)
-        if user:
-            user.ban_status = BanStatus(
-                is_banned=True,
-                ban_duration=ban_duration,
-                banned_on=datetime.datetime.now().isoformat(),
-                ban_reason=ban_reason
-            )
-            await user.save()
-
-    async def get_ban_status(self, id: int):
-        user = await User.get(id)
-        return user.ban_status.model_dump() if user else BanStatus().model_dump()
-
-    async def get_all_banned_users(self):
-        users = await User.find(User.ban_status.is_banned == True).to_list()
-        return [user.model_dump(by_alias=True) for user in users]
-    
-    async def add_user_format_template(self, user_id: int, template: str):
-        user = await User.get(user_id)
-        if user:
-            user.format_template = template
-            await user.save()
-        else:
-            user = User(id=user_id, format_template=template)
-            await user.insert()
-
-    async def get_format_template(self, user_id: int):
-        user = await User.get(user_id)
-        return user.format_template if user else None
-
-    # --- PERSISTENT BOT STATUS FUNCTIONS ---
-    async def get_bot_stats(self):
-        stats = await BotStats.get("bot_stats")
-        if not stats:
-            stats = BotStats()
-            await stats.insert()
-        return stats.model_dump(by_alias=True)
-
-    async def update_traffic(self, sent: int, recv: int):
-        stats = await BotStats.get("bot_stats")
-        if not stats:
-            stats = BotStats()
-        stats.total_sent += sent
-        stats.total_recv += recv
-        stats.last_updated = time.time()
-        await stats.save()
-
-    async def get_network_stats(self):
-        stats = await self.get_bot_stats()
-        return {
-            "sent": stats.get("total_sent", 0), 
-            "recv": stats.get("total_recv", 0)
-        }
+        title = "All-Time" if lb_type == "lifetime" else "Daily"
+        text = f"📊 **Digital Auto Rename Bot - Top 20 {title} Uploaders** 📊\n\n"
         
-    async def update_network_stats(self, sent_delta: int, recv_delta: int):
-        await self.update_traffic(sent_delta, recv_delta)
-        
-    # --- PREMIUM & LIMIT FUNCTIONS ---
-    async def add_premium(self, user_id: int, days: int):
-        user = await User.get(user_id)
-        if user:
-            user.is_premium = True
+        for i, user in enumerate(users):
+            # Medals
+            if i == 0: medal = "🥇"
+            elif i == 1: medal = "🥈"
+            elif i == 2: medal = "🥉"
+            else: medal = "🎖"
+                
+            u_id = user.get('_id', user.get('id'))
+            first_name = user.get('first_name')
+            username = user.get('username')
             
-            # THE LIFETIME FIX: If days is 0, make it permanent!
-            if days == 0:
-                user.premium_expiry = None
+            # FALLBACK: Fetch missing names & save to DB so it doesn't lag next time
+            if not first_name or first_name == "User":
+                try:
+                    tg_user = await bot.get_users(u_id)
+                    first_name = tg_user.first_name or "User"
+                    username = tg_user.username
+                    await digital_botz.db["user"].update_one({"_id": u_id}, {"$set": {"first_name": first_name, "username": username}})
+                    await asyncio.sleep(0.2) # Prevent floodwait
+                except Exception:
+                    first_name = "User"
+
+            # Clean name to prevent markdown breaking
+            first_name = str(first_name).replace('_', ' ').replace('*', '').replace('`', '').replace('[', '').replace(']', '')
+            
+            # THE MAGIC FIX: Left-to-Right Mark (\u200E) prevents Arabic letters from flipping the layout!
+            first_name = f"\u200E{first_name}\u200E"
+            
+            # Format clickables
+            if username:
+                name_link = f"[{first_name}](https://t.me/{username})"
             else:
-                expiry = datetime.datetime.now() + datetime.timedelta(days=days)
-                user.premium_expiry = expiry.isoformat()
+                name_link = f"[{first_name}](tg://user?id={u_id})"
                 
-            user.notified_24h = False # <--- NEW: Reset the notification flag when renewed
-            await user.save()
-        
-    async def remove_premium(self, user_id: int):
-        user = await User.get(user_id)
-        if user:
-            user.is_premium = False
-            user.premium_expiry = None
-            user.notified_24h = False
-            await user.save()
-
-    async def check_premium(self, user_id: int):
-        user = await User.get(user_id)
-        if user and user.is_premium:
-            if user.premium_expiry:
-                try:
-                    expiry_dt = datetime.datetime.fromisoformat(user.premium_expiry)
-                except ValueError:
-                    # Fallback for old "YYYY-MM-DD" entries
-                    expiry_dt = datetime.datetime.combine(datetime.date.fromisoformat(user.premium_expiry), datetime.time.max)
-
-                if datetime.datetime.now() <= expiry_dt:
-                    return True
-                else:
-                    # Subscription expired
-                    user.is_premium = False
-                    user.premium_expiry = None
-                    user.notified_24h = False
-                    await user.save()
-                    return False
-            return True 
-        return False
-        
-    async def check_daily_limit(self, user_id: int, file_size: int):
-        user = await User.get(user_id)
-        if not user: return True
-        if await self.check_premium(user_id): return True
-            
-        today = datetime.date.today().isoformat()
-        if user.last_upload_date != today:
-            user.daily_upload_bytes = 0
-            user.last_upload_date = today
-            await user.save()
-            
-        FREE_LIMIT = 6 * 1024 * 1024 * 1024 
-        return (user.daily_upload_bytes + file_size) <= FREE_LIMIT
-
-    async def update_daily_limit(self, user_id: int, file_size: int):
-        user = await User.get(user_id)
-        if not user: return
-            
-        today = datetime.date.today().isoformat()
-        if user.last_upload_date != today:
-            user.daily_upload_bytes = 0
-            user.last_upload_date = today
-            
-        user.daily_upload_bytes += file_size
-        
-        # --- LEADERBOARD LIFETIME TRACKER ---
-        user.lifetime_upload_bytes = getattr(user, "lifetime_upload_bytes", 0) + file_size
-        # ------------------------------------
-        
-        await user.save()
-
-    # ==========================================
-    # --- 24-HOUR EXPIRY NOTIFICATION UTILS ---
-    # ==========================================
-    async def get_expiring_users(self):
-        """Fetches users who expire in the next 24 hours and haven't been notified"""
-        now = datetime.datetime.now()
-        target_time = now + datetime.timedelta(hours=24)
-        
-        expiring_users = []
-        # Find premium users who haven't received their 24h warning yet
-        users = await User.find(User.is_premium == True, User.notified_24h == False).to_list()
-        
-        for user in users:
-            if user.premium_expiry:
-                try:
-                    expiry_dt = datetime.datetime.fromisoformat(user.premium_expiry)
-                except ValueError:
-                    expiry_dt = datetime.datetime.combine(datetime.date.fromisoformat(user.premium_expiry), datetime.time.max)
+            # Get Correct Bytes for Auto Rename Bot DB Structure
+            used_bytes = user.get('lifetime_upload_bytes', 0) if lb_type == "lifetime" else user.get('daily_upload_bytes', 0)
                 
-                # Check if the expiry is within the 24-hour window
-                if now < expiry_dt <= target_time:
-                    expiring_users.append(user)
-                    
-        return expiring_users
-
-    async def mark_notified(self, user_id: int):
-        """Marks the user so they don't get spammed every hour"""
-        user = await User.get(user_id)
-        if user:
-            user.notified_24h = True
-            await user.save()
-
-    # ==========================================
-    # --- LEADERBOARD FETCH UTILS ---
-    # ==========================================
-    async def get_leaderboard(self, lb_type="lifetime", limit=20):
-        """Fetches the top users for the leaderboard. lb_type can be 'lifetime' or 'daily'"""
+            text += f"{medal} **{i+1}.** {name_link} (`{u_id}`)\n"
+            text += f"🚀 **Total Used:** `{humanbytes(used_bytes)}`\n\n"
+        
+        # Add a tip using double asterisks (No single asterisks)
         if lb_type == "lifetime":
-            # SELF-HEALING MIGRATION: 
-            # If a user's daily limit is higher than lifetime (due to recent update), instantly sync them!
-            await self.db["user"].update_many(
-                {"$expr": {"$lt": ["$lifetime_upload_bytes", "$daily_upload_bytes"]}},
-                [{"$set": {"lifetime_upload_bytes": "$daily_upload_bytes"}}]
-            )
-            cursor = self.db["user"].find({"lifetime_upload_bytes": {"$gt": 0}}).sort("lifetime_upload_bytes", -1).limit(limit)
+            text += "💡 **Tip: Use `/top daily` for today's leaderboard.**"
         else:
-            cursor = self.db["user"].find({"daily_upload_bytes": {"$gt": 0}}).sort("daily_upload_bytes", -1).limit(limit)
+            text += "💡 **Tip: Use `/top` for the all-time leaderboard.**"
+            
+        await rkn.edit(text, disable_web_page_preview=True)
         
-        return await cursor.to_list(length=limit)
+        # --- SEND TO LOGS CHANNEL ---
+        if Config.LOG_CHANNEL:
+            try:
+                await bot.send_message(
+                    chat_id=Config.LOG_CHANNEL, 
+                    text=f"**Leaderboard Generated By Admin:**\n\n{text}", 
+                    disable_web_page_preview=True
+                )
+            except Exception as e:
+                logger.error(f"Could not send leaderboard to log channel: {e}")
+                pass
+        # ----------------------------
+        
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        await rkn.edit(f"⚠️ **Error Fetching Leaderboard:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
 
-    # ==========================================
-    # --- PERSISTENT QUEUE (TASK) FUNCTIONS ---
-    # ==========================================
-    async def add_task(self, user_id: int, message_id: int):
-        """Adds a message to the persistent MongoDB task queue"""
-        task = Task(user_id=user_id, message_id=message_id)
-        await task.insert()
-        return task.id
+# --- ADD / REMOVE PREMIUM COMMANDS ---
+@Client.on_message(filters.command("addprem") & filters.user(Config.ADMIN))
+async def add_premium_user(bot, message):
+    if len(message.command) < 2:
+        await message.reply_text(
+            "⚠️ **Usage:** `/addprem user_id [days]`\n\n"
+            "Example for 1 Month: `/addprem 123456789 30`\n"
+            "Example for Lifetime: `/addprem 123456789 0`\n"
+            "If days are not provided, it defaults to 30 days."
+        )
+        return
 
-    async def get_pending_tasks(self, user_id: int):
-        """Fetches all tasks that haven't been completed yet (useful on reboot)"""
-        tasks = await Task.find(Task.user_id == user_id, Task.status == "pending").sort(+Task.created_at).to_list()
-        return tasks
+    try:
+        user_id = int(message.command[1])
+        days = int(message.command[2]) if len(message.command) > 2 else 30 # Default to 1 Month
+        
+        if not await digital_botz.is_user_exist(user_id):
+            return await message.reply_text("⚠️ User not found in database. They need to start the bot first.")
 
-    async def update_task_status(self, task_id, status: str):
-        """Update status to 'processing' to prevent duplicate execution"""
-        task = await Task.get(task_id)
-        if task:
-            task.status = status
-            await task.save()
+        await digital_botz.add_premium(user_id, days)
+        
+        # LIFETIME FIX: Determine dynamic text based on days
+        plan_text = "Lifetime ♾️" if days == 0 else f"{days} days"
+        
+        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium for {plan_text}!**")
+        
+        # Try to notify the user
+        try:
+            await bot.send_message(
+                user_id, 
+                f"🎉 **Congratulations!**\n\n"
+                f"Your payment was successful! You have been upgraded to **Premium Status** for **{plan_text}**! 🌟\n\n"
+                "**Premium Features Unlocked:**\n"
+                "• ♾️ No 6GB Daily Limit\n"
+                "• 🚀 Upload files larger than 2GB\n"
+                "• ⚡ Priority Processing\n\n"
+                "Thank you for your support!"
+            )
+        except:
+            pass # User might have blocked the bot
+            
+    except ValueError:
+        await message.reply_text("⚠️ **Error:** User ID and Days must be numbers.")
+    except Exception as e:
+        await message.reply_text(f"⚠️ **Error:** {e}")
 
-    async def delete_task(self, task_id):
-        """Removes the task from DB once upload is completely finished"""
-        task = await Task.get(task_id)
-        if task:
-            await task.delete()
+@Client.on_message(filters.command("rmprem") & filters.user(Config.ADMIN))
+async def remove_premium_user(bot, message):
+    if len(message.command) == 1:
+        await message.reply_text("⚠️ **Usage:** `/rmprem user_id`\n\nExample: `/rmprem 123456789`")
+        return
 
-    async def clear_user_tasks(self, user_id: int):
-        """Emergency clear all stuck tasks for a user"""
-        await Task.find(Task.user_id == user_id).delete()
+    try:
+        user_id = int(message.command[1])
+        if not await digital_botz.is_user_exist(user_id):
+            return await message.reply_text("⚠️ User not found in database.")
 
-digital_botz = Database(Config.DB_URL, Config.DB_NAME)
+        await digital_botz.remove_premium(user_id)
+        await message.reply_text(f"✅ **Successfully removed Premium status from user `{user_id}`.**")
+        
+        # Try to notify the user
+        try:
+            await bot.send_message(
+                user_id, 
+                "⚠️ **Your Premium Subscription has ended or been revoked.**\n\n"
+                "You have been moved back to the free tier. Send `/plans` to check out our cheap plans starting at just 1 USDT, or contact @xspes to renew!"
+            )
+        except:
+            pass
+            
+    except ValueError:
+        await message.reply_text("⚠️ **Error:** User ID must be a number.")
+    except Exception as e:
+        await message.reply_text(f"⚠️ **Error:** {e}")
+
+# bot logs process 
+@Client.on_message(filters.command('logs') & filters.user(Config.ADMIN))
+async def log_file(b, m):
+    try:
+        await m.reply_document('BotLog.txt')
+    except Exception as e:
+        await m.reply(str(e))
+
+# Restart to cancel all process 
+@Client.on_message(filters.private & filters.command("restart") & filters.user(Config.ADMIN))
+async def restart_bot(b, m):
+    rkn = await b.send_message(text="**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....**", chat_id=m.chat.id)
+    failed = 0
+    success = 0
+    deactivated = 0
+    blocked = 0
+    start_time = time.time()
+    
+    try:
+        total_users = await digital_botz.total_users_count()
+        all_users = await digital_botz.get_all_users()
+        
+        # FIXED: Changed async for to standard for loop
+        for user in all_users:
+            user_id = user.get('_id', user.get('id'))
+            if not user_id:
+                continue
+                
+            try:
+                restart_msg = f"ʜᴇʏ, {(await b.get_users(user_id)).mention}\n\n**🔄 ᴘʀᴏᴄᴇssᴇs sᴛᴏᴘᴘᴇᴅ. ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛɪɴɢ.....\n\n✅️ ʙᴏᴛ ɪs ʀᴇsᴛᴀʀᴛᴇᴅ. ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ.**"
+                await b.send_message(user_id, restart_msg)
+                success += 1
+            except InputUserDeactivated:
+                deactivated +=1
+                await digital_botz.delete_user(user_id)
+            except UserIsBlocked:
+                blocked +=1
+                await digital_botz.delete_user(user_id)
+            except Exception as e:
+                failed += 1
+                pass
+                
+            try:
+                if (success + failed + deactivated + blocked) % 50 == 0:
+                    await rkn.edit(f"<u>ʀᴇsᴛᴀʀᴛ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ:</u>\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+                
+        completed_restart = datetime.timedelta(seconds=int(time.time() - start_time))
+        await rkn.edit(f"ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʀᴇsᴛᴀʀᴛ: {completed_restart}\n\n• ᴛᴏᴛᴀʟ ᴜsᴇʀs: {total_users}\n• sᴜᴄᴄᴇssғᴜʟ: {success}\n• ʙʟᴏᴄᴋᴇᴅ ᴜsᴇʀs: {blocked}\n• ᴅᴇʟᴇᴛᴇᴅ ᴀᴄᴄᴏᴜɴᴛs: {deactivated}\n• ᴜɴsᴜᴄᴄᴇssғᴜʟ: {failed}")
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        await rkn.edit(f"⚠️ **Critical Error during Restart:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
+        
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+@Client.on_message(filters.private & filters.command("ban") & filters.user(Config.ADMIN))
+async def ban(c: Client, m: Message):
+    if len(m.command) == 1:
+        await m.reply_text(
+            f"Use this command to ban any user from the bot.\n\n"
+            f"Usage:\n\n"
+            f"`/ban user_id ban_duration ban_reason`\n\n"
+            f"Eg: `/ban 1234567 28 You misused me.`\n"
+            f"This will ban user with id `1234567` for `28` days for the reason `You misused me`.",
+            quote=True
+        )
+        return
+
+    try:
+        user_id = int(m.command[1])
+        ban_duration = int(m.command[2])
+        ban_reason = ' '.join(m.command[3:])
+        ban_log_text = f"Banning user {user_id} for {ban_duration} days for the reason {ban_reason}."
+        try:
+            await c.send_message(user_id,              
+                f"You are banned to use this bot for **{ban_duration}** day(s) for the reason __{ban_reason}__ \n\n"
+                f"**Message from the admin**"
+            )
+            ban_log_text += '\n\nUser notified successfully!'
+        except:
+            ban_log_text += f"\n\nUser notification failed (user may have blocked the bot)."
+
+        await digital_botz.ban_user(user_id, ban_duration, ban_reason)
+        await m.reply_text(ban_log_text, quote=True)
+    except:
+        traceback.print_exc()
+        await m.reply_text(
+            f"Error occoured! Traceback given below\n\n`{traceback.format_exc()}`",
+            quote=True
+        )
+
+@Client.on_message(filters.private & filters.command("unban") & filters.user(Config.ADMIN))
+async def unban(c: Client, m: Message):
+    if len(m.command) == 1:
+        await m.reply_text(
+            f"Use this command to unban any user.\n\n"
+            f"Usage:\n\n`/unban user_id`\n\n"
+            f"Eg: `/unban 1234567`\n"
+            f"This will unban user with id `1234567`.",
+            quote=True
+        )
+        return
+
+    try:
+        user_id = int(m.command[1])
+        unban_log_text = f"Unbanning user {user_id}"
+        try:
+            await c.send_message(user_id, f"Your ban was lifted!")
+            unban_log_text += '\n\nUser notified successfully!'
+        except:
+            unban_log_text += f"\n\nUser notification failed!"
+            
+        await digital_botz.remove_ban(user_id)
+        await m.reply_text(unban_log_text, quote=True)
+    except:
+        traceback.print_exc()
+        await m.reply_text(
+            f"Error occurred! Traceback given below\n\n`{traceback.format_exc()}`",
+            quote=True
+        )
+
+
+@Client.on_message(filters.private & filters.command("banned_users") & filters.user(Config.ADMIN))
+async def _banned_users(_, m: Message):
+    try:
+        all_banned_users = await digital_botz.get_all_banned_users()
+        banned_usr_count = 0
+        text = ''
+        
+        # FIXED: Changed async for to standard for loop and added dict `.get` safety
+        for banned_user in all_banned_users:
+            user_id = banned_user.get('_id', banned_user.get('id'))
+            ban_status = banned_user.get('ban_status', {})
+            ban_duration = ban_status.get('ban_duration', 0)
+            banned_on = ban_status.get('banned_on', 'Unknown')
+            ban_reason = ban_status.get('ban_reason', 'None')
+            banned_usr_count += 1
+            text += f"> **user_id**: `{user_id}`, **Ban Duration**: `{ban_duration}`, " \
+                    f"**Banned on**: `{banned_on}`, **Reason**: `{ban_reason}`\n\n"
+                    
+        reply_text = f"Total banned user(s): `{banned_usr_count}`\n\n{text}"
+        
+        if len(reply_text) > 4096:
+            with open('banned-users.txt', 'w') as f:
+                f.write(reply_text)
+            await m.reply_document('banned-users.txt', True)
+            os.remove('banned-users.txt')
+            return
+            
+        await m.reply_text(reply_text, True)
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        await m.reply_text(f"⚠️ **Error Fetching Banned Users:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
+
+     
+# FIXED: Removed filters.reply to ensure the command is caught
+@Client.on_message(filters.command("broadcast") & filters.user(Config.ADMIN))
+async def broadcast_handler(bot: Client, m: Message):
+    # Explicitly check for reply here
+    if not m.reply_to_message:
+        return await m.reply_text("⚠️ **Please reply to a message (text, photo, or file) with `/broadcast` to send it to all users.**")
+
+    # Let the admin know it started immediately
+    sts_msg = await m.reply_text("🚀 **Bʀᴏᴀᴅᴄᴀꜱᴛ Sᴛᴀʀᴛᴇᴅ..! Fetching users...**") 
+
+    try:
+        # Protect log channel notification from crashing the script
+        try:
+            if Config.LOG_CHANNEL:
+                await bot.send_message(Config.LOG_CHANNEL, f"{m.from_user.mention} or {m.from_user.id} Iꜱ ꜱᴛᴀʀᴛᴇᴅ ᴛʜᴇ Bʀᴏᴀᴅᴄᴀꜱᴛ......")
+        except Exception as e:
+            logger.error(f"Log channel error during broadcast: {e}")
+            pass
+
+        all_users = await digital_botz.get_all_users()
+        broadcast_msg = m.reply_to_message
+        
+        done = 0
+        failed = 0
+        success = 0
+        start_time = time.time()
+        total_users = await digital_botz.total_users_count()
+        
+        # FIXED: Changed async for to standard for loop
+        for user in all_users:
+            user_id = user.get('_id', user.get('id'))
+            if not user_id:
+                continue
+                
+            sts = await send_msg(user_id, broadcast_msg)
+            if sts == 200:
+               success += 1
+            else:
+               failed += 1
+            if sts == 400:
+               await digital_botz.delete_user(user_id)
+               
+            done += 1
+            if not done % 20:
+               await sts_msg.edit(f"Bʀᴏᴀᴅᴄᴀꜱᴛ Iɴ Pʀᴏɢʀᴇꜱꜱ: \nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users} \nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+               
+        completed_in = datetime.timedelta(seconds=int(time.time() - start_time))
+        await sts_msg.edit(f"✅ Bʀᴏᴀᴅᴄᴀꜱᴛ Cᴏᴍᴩʟᴇᴛᴇᴅ: \nCᴏᴍᴩʟᴇᴛᴇᴅ Iɴ `{completed_in}`.\n\nTᴏᴛᴀʟ Uꜱᴇʀꜱ {total_users}\nCᴏᴍᴩʟᴇᴛᴇᴅ: {done} / {total_users}\nSᴜᴄᴄᴇꜱꜱ: {success}\nFᴀɪʟᴇᴅ: {failed}")
+        
+    except Exception as e:
+        # Ultimate Failsafe: Will display exact error directly in telegram
+        traceback_str = traceback.format_exc()
+        await sts_msg.edit(f"⚠️ **Critical Error during Broadcast:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
+           
+async def send_msg(user_id, message):
+    try:
+        await message.copy(chat_id=int(user_id))
+        return 200
+    except FloodWait as e:
+        await asyncio.sleep(e.value)
+        return await send_msg(user_id, message)
+    except InputUserDeactivated:
+        return 400
+    except UserIsBlocked:
+        return 400
+    except PeerIdInvalid:
+        return 400
+    except Exception as e:
+        logger.error(f"{user_id} : {e}")
+        return 500
+ 
+
+# Rkn Developer 
+# Don't Remove Credit 😔
+# Telegram Channel @RknDeveloper & @Rkn_Botz
+# Developer @RknDeveloperr
