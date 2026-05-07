@@ -267,9 +267,10 @@ async def upload_worker(client, user_id):
                 )
 
                 if not error:
-                    is_premium = await digital_botz.check_premium(user_id)
-                    if not is_premium:
-                        await digital_botz.update_daily_limit(user_id, data['file_size'])
+                    # --- LEADERBOARD TRACKING FIX ---
+                    # Now tracks bytes for EVERYONE, including Premium/Admins!
+                    await digital_botz.update_daily_limit(user_id, data['file_size'])
+                    # --------------------------------
                     
                     if uploader == app:
                         await client.copy_message(user_id, filw.chat.id, filw.id)
