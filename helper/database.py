@@ -30,6 +30,13 @@ class BanStatus(BaseModel):
 
 class User(Document):
     id: int = Field(alias="_id")
+    
+    # --- LEADERBOARD DATA CACHE ---
+    first_name: Optional[str] = None
+    username: Optional[str] = None
+    lifetime_upload_bytes: int = 0
+    # ------------------------------
+    
     file_id: Optional[str] = None
     caption: Optional[str] = None
     join_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
@@ -86,9 +93,16 @@ class Database:
         from helper.utils import send_log
         u = m.from_user
         if not await self.is_user_exist(u.id):
-            user = User(id=u.id)
+            user = User(id=u.id, first_name=u.first_name, username=u.username)
             await user.insert()
             await send_log(b, u)
+        else:
+            # Update username cache for the leaderboard if they changed it
+            user = await User.get(u.id)
+            if user and (getattr(user, "first_name", None) != u.first_name or getattr(user, "username", None) != u.username):
+                user.first_name = u.first_name
+                user.username = u.username
+                await user.save()
 
     async def is_user_exist(self, id: int):
         return await User.get(id) is not None
@@ -267,6 +281,11 @@ class Database:
             user.last_upload_date = today
             
         user.daily_upload_bytes += file_size
+        
+        # --- LEADERBOARD LIFETIME TRACKER ---
+        user.lifetime_upload_bytes = getattr(user, "lifetime_upload_bytes", 0) + file_size
+        # ------------------------------------
+        
         await user.save()
 
     # ==========================================
@@ -300,6 +319,24 @@ class Database:
         if user:
             user.notified_24h = True
             await user.save()
+
+    # ==========================================
+    # --- LEADERBOARD FETCH UTILS ---
+    # ==========================================
+    async def get_leaderboard(self, lb_type="lifetime", limit=20):
+        """Fetches the top users for the leaderboard. lb_type can be 'lifetime' or 'daily'"""
+        if lb_type == "lifetime":
+            # SELF-HEALING MIGRATION: 
+            # If a user's daily limit is higher than lifetime (due to recent update), instantly sync them!
+            await self.db["user"].update_many(
+                {"$expr": {"$lt": ["$lifetime_upload_bytes", "$daily_upload_bytes"]}},
+                [{"$set": {"lifetime_upload_bytes": "$daily_upload_bytes"}}]
+            )
+            cursor = self.db["user"].find({"lifetime_upload_bytes": {"$gt": 0}}).sort("lifetime_upload_bytes", -1).limit(limit)
+        else:
+            cursor = self.db["user"].find({"daily_upload_bytes": {"$gt": 0}}).sort("daily_upload_bytes", -1).limit(limit)
+        
+        return await cursor.to_list(length=limit)
 
     # ==========================================
     # --- PERSISTENT QUEUE (TASK) FUNCTIONS ---
