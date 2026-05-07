@@ -24,7 +24,7 @@ from PIL import Image
 
 # bots imports
 from helper.utils import progress_for_pyrogram, convert, humanbytes, add_prefix_suffix, remove_path
-from helper.database import digital_botz, Task # <-- IMPORTED TASK MODEL
+from helper.database import digital_botz, Task 
 from config import Config
 from plugins.auto_rename import EnhancedAutoRenamer
 
@@ -39,6 +39,26 @@ DOWNLOAD_TEXT = """Download Started..."""
 app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH, session_string=Config.STRING_SESSION)
 
 renamer = EnhancedAutoRenamer()
+
+# ==========================================
+# --- LEAST BUSY WORKER LOAD BALANCER ---
+# ==========================================
+worker_loads = {}
+
+def get_least_busy_worker(main_client):
+    """Finds the worker currently handling the fewest queues."""
+    workers = getattr(Config, "WORKER_CLIENTS", [])
+    if not workers:
+        return main_client
+    
+    for w in workers:
+        if w not in worker_loads:
+            worker_loads[w] = 0
+            
+    # Return the worker with the minimum active tasks
+    least_busy = min(workers, key=lambda w: worker_loads.get(w, 0))
+    return least_busy
+# ==========================================
 
 # ==========================================
 # --- QUEUE MANAGER CLASS ---
@@ -133,27 +153,32 @@ async def rename_start(client, message):
             return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
     # ------------------------------
 
-    # 1. Add Task to MongoDB Backup
+    # Add Task to MongoDB Backup
     task_id = await digital_botz.add_task(user_id, message.id)
 
-    # 2. Add Message to Queue Manager
+    # Add Message to Queue Manager
     pos = manager.add_task(user_id, message, task_id)
     
-    # 3. Check if Workers are already running
+    # If workers are already running for this user, just let the queue handle it!
     if manager.has_worker(user_id):
         await message.reply_text(f"✅ **Added to Queue!**\nPosition: {pos}", quote=True)
         return
 
-    # 4. Initialize Upload Queue and Start Workers
+    # --- ASSIGN FLEET WORKER FOR THIS USER'S QUEUE ---
     manager.init_upload_queue(user_id)
-    dl_task = asyncio.create_task(download_worker(client, user_id))
-    ul_task = asyncio.create_task(upload_worker(client, user_id))
+    assigned_worker = get_least_busy_worker(client)
+    if assigned_worker != client:
+        worker_loads[assigned_worker] = worker_loads.get(assigned_worker, 0) + 1
+
+    # Start Workers using the Assigned Fleet Bot
+    dl_task = asyncio.create_task(download_worker(client, assigned_worker, user_id))
+    ul_task = asyncio.create_task(upload_worker(client, assigned_worker, user_id))
     manager.register_workers(user_id, dl_task, ul_task)
 
-async def download_worker(client, user_id):
+async def download_worker(main_client, worker_client, user_id):
     try:
         while user_id in manager.user_tasks and manager.user_tasks[user_id]:
-            # Sort Queue by Season/Episode if applicable
+            # Sort Queue by Season/Episode to maintain perfect order!
             def get_sort_key(item):
                 try:
                     file_val = getattr(item['msg'], item['msg'].media.value)
@@ -168,7 +193,6 @@ async def download_worker(client, user_id):
             message = item['msg']
             task_id = item['task_id']
             
-            # Mark task as processing in DB
             await digital_botz.update_task_status(task_id, "processing")
             
             try:
@@ -176,10 +200,8 @@ async def download_worker(client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
                 
-                # Send Status
                 rkn_processing = await message.reply_text("**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**")
 
-                # Rename Logic
                 info = renamer.extract_all_info(filename)
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
@@ -191,14 +213,37 @@ async def download_worker(client, user_id):
                 if not os.path.isdir("Renames"): os.makedirs("Renames", exist_ok=True)
                 file_path = f"Renames/{new_filename}"
 
-                # Download Process
                 await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
-                dl_path = await client.download_media(
-                    message=message, 
-                    file_name=file_path, 
-                    progress=progress_for_pyrogram, 
-                    progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
-                )
+                
+                # --- LOG CHANNEL BRIDGE FOR QUEUE ---
+                log_msg = None
+                if worker_client != main_client:
+                    try:
+                        log_msg = await message.copy(Config.LOG_CHANNEL)
+                        target_msg = await worker_client.get_messages(Config.LOG_CHANNEL, log_msg.id)
+                    except Exception as e:
+                        await digital_botz.delete_task(task_id)
+                        await rkn_processing.edit(f"⚠️ **Fleet Error:** Main bot must be Admin in LOG_CHANNEL.\n{e}")
+                        continue
+                else:
+                    target_msg = message
+
+                try:
+                    dl_path = await worker_client.download_media(
+                        message=target_msg, 
+                        file_name=file_path, 
+                        progress=progress_for_pyrogram, 
+                        progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
+                    )
+                except Exception as e:
+                    print(f"Download Error: {e}")
+                    await digital_botz.delete_task(task_id)
+                    await rkn_processing.edit(f"**Download Error:** {e}")
+                    continue
+                finally:
+                    if log_msg:
+                        try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
+                        except: pass
 
                 # Metadata & Thumbnail Setup
                 duration = 0
@@ -216,11 +261,10 @@ async def download_worker(client, user_id):
                 caption = c_caption.format(filename=new_filename, filesize=filesize, duration=convert(duration)) if c_caption else f"**{new_filename}**"
                 
                 if c_thumb:
-                    ph_path = await client.download_media(c_thumb)
+                    ph_path = await main_client.download_media(c_thumb)
                 elif getattr(rkn_file, 'thumbs', None):
-                    ph_path = await client.download_media(rkn_file.thumbs[0].file_id)
+                    ph_path = await main_client.download_media(rkn_file.thumbs[0].file_id)
 
-                # Determine Upload Type
                 upload_type = "document"
                 if message.media == MessageMediaType.VIDEO: upload_type = "video"
                 elif message.media == MessageMediaType.AUDIO: upload_type = "audio"
@@ -231,22 +275,21 @@ async def download_worker(client, user_id):
                     'message': message, 'file_path': file_path, 'ph_path': ph_path,
                     'caption': caption, 'duration': duration, 'rkn_processing': rkn_processing,
                     'upload_type': upload_type, 'file_size': rkn_file.file_size, 'user_id': user_id,
-                    'task_id': task_id # Pass DB ID down the chain
+                    'task_id': task_id
                 }
                 
-                # Push to Upload Queue
                 await manager.upload_queues[user_id].put(upload_data)
                 
             except Exception as e:
-                print(f"Download Error: {e}")
-                await digital_botz.delete_task(task_id) # Delete broken task so it doesn't loop forever
+                print(f"Queue Error: {e}")
+                await digital_botz.delete_task(task_id)
                 
             await asyncio.sleep(1)
     finally:
         if user_id in manager.upload_queues:
             await manager.upload_queues[user_id].put(None)
 
-async def upload_worker(client, user_id):
+async def upload_worker(main_client, worker_client, user_id):
     try:
         while True:
             if user_id not in manager.upload_queues:
@@ -255,42 +298,56 @@ async def upload_worker(client, user_id):
             data = await manager.upload_queues[user_id].get()
             if data is None: break
                 
-            uploader = app if (Config.STRING_SESSION and data['file_size'] > 2000 * 1024 * 1024) else client
+            uploader = app if (Config.STRING_SESSION and data['file_size'] > 2000 * 1024 * 1024) else worker_client
+            is_main_bot = (uploader == main_client)
             
             try:
                 await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                filw, error = await upload_files(
-                    uploader, 
-                    Config.LOG_CHANNEL if uploader == app else data['user_id'], 
-                    data['upload_type'], data['file_path'], data['ph_path'], 
-                    data['caption'], data['duration'], data['rkn_processing']
-                )
+                
+                if not is_main_bot:
+                    filw, error = await upload_files(
+                        uploader, 
+                        Config.LOG_CHANNEL, 
+                        data['upload_type'], data['file_path'], data['ph_path'], 
+                        data['caption'], data['duration'], data['rkn_processing']
+                    )
+                    if not error and filw:
+                        await asyncio.sleep(2)
+                        await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                        try: await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
+                        except: pass
+                else:
+                    filw, error = await upload_files(
+                        uploader, 
+                        data['user_id'], 
+                        data['upload_type'], data['file_path'], data['ph_path'], 
+                        data['caption'], data['duration'], data['rkn_processing']
+                    )
 
                 if not error:
-                    # --- LEADERBOARD TRACKING FIX ---
-                    # Now tracks bytes for EVERYONE, including Premium/Admins!
+                    # Active Leaderboard Tracking
                     await digital_botz.update_daily_limit(user_id, data['file_size'])
-                    # --------------------------------
                     
-                    if uploader == app:
-                        await client.copy_message(user_id, filw.chat.id, filw.id)
-                    
-                    # 🎉 TASK COMPLETE: Delete from DB so it doesn't resume!
                     await digital_botz.delete_task(data['task_id'])
-                    
                     await data['rkn_processing'].edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
                     await asyncio.sleep(2)
                     await data['rkn_processing'].delete()
+                else:
+                    await digital_botz.delete_task(data['task_id'])
+                    await data['rkn_processing'].edit(f"**Eʀʀᴏʀ:** {error}")
 
             except Exception as e:
                 print(f"Upload task failed: {e}")
-                await digital_botz.delete_task(data['task_id']) # Clean up failed task
+                await digital_botz.delete_task(data['task_id'])
 
             finally:
                 await remove_path(data['ph_path'], data['file_path'])
             
     finally:
         manager.cleanup(user_id)
+        # Queue complete! Release the worker for the next user.
+        if worker_client != main_client:
+            worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing):
     try:
