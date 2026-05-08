@@ -41,6 +41,20 @@ app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH
 renamer = EnhancedAutoRenamer()
 
 # ==========================================
+# --- SEQUENCE SORTER ---
+# ==========================================
+def get_sort_key(item):
+    """Extracts Season and Episode to maintain strict sequential order."""
+    try:
+        file_val = getattr(item['msg'], item['msg'].media.value)
+        info = renamer.extract_all_info(file_val.file_name or "")
+        s = int(info['season'].upper().replace("S", "")) if info.get('season') else 0
+        e = int(info['episode'].upper().replace("E", "")) if info.get('episode') else 0
+        return (s, e)
+    except: 
+        return (999, 999)
+
+# ==========================================
 # --- LEAST BUSY WORKER LOAD BALANCER ---
 # ==========================================
 worker_loads = {}
@@ -58,7 +72,6 @@ def get_least_busy_worker(main_client):
     # Return the worker with the minimum active tasks
     least_busy = min(workers, key=lambda w: worker_loads.get(w, 0))
     return least_busy
-# ==========================================
 
 # ==========================================
 # --- QUEUE MANAGER CLASS ---
@@ -71,11 +84,18 @@ class QueueManager:
         self.workers = {}       
 
     def add_task(self, user_id, message, task_id):
-        """Adds a message and its DB task ID to the user's queue"""
+        """Adds a message to the queue, sorts it by sequence, and returns the TRUE position"""
         if user_id not in self.user_tasks:
             self.user_tasks[user_id] = []
-        self.user_tasks[user_id].append({'msg': message, 'task_id': task_id})
-        return len(self.user_tasks[user_id])
+            
+        new_item = {'msg': message, 'task_id': task_id}
+        self.user_tasks[user_id].append(new_item)
+        
+        # Sort immediately so the position reflects the true rename sequence!
+        self.user_tasks[user_id].sort(key=get_sort_key)
+        
+        # Return its actual sorted place in the waiting line
+        return self.user_tasks[user_id].index(new_item) + 1
 
     def has_worker(self, user_id):
         return user_id in self.workers
@@ -156,7 +176,7 @@ async def rename_start(client, message):
     # 1. Add Task to MongoDB Backup
     task_id = await digital_botz.add_task(user_id, message.id)
 
-    # 2. Add Message to Queue Manager
+    # 2. Add Message to Queue Manager (Now returns the true sorted position!)
     pos = manager.add_task(user_id, message, task_id)
     
     # 3. Check if Workers are already running
@@ -178,18 +198,11 @@ async def rename_start(client, message):
 async def download_worker(main_client, worker_client, user_id):
     try:
         while user_id in manager.user_tasks and manager.user_tasks[user_id]:
-            # Sort Queue by Season/Episode if applicable
-            def get_sort_key(item):
-                try:
-                    file_val = getattr(item['msg'], item['msg'].media.value)
-                    info = renamer.extract_all_info(file_val.file_name or "")
-                    s = int(info['season'].upper().replace("S", "")) if info.get('season') else 0
-                    e = int(info['episode'].upper().replace("E", "")) if info.get('episode') else 0
-                    return (s, e)
-                except: return (999, 999)
-
+            
+            # Double check sort before popping to ensure perfect sequence
             manager.user_tasks[user_id].sort(key=get_sort_key)
             item = manager.user_tasks[user_id].pop(0)
+            
             message = item['msg']
             task_id = item['task_id']
             
@@ -304,7 +317,7 @@ async def upload_worker(main_client, worker_client, user_id):
             data = await manager.upload_queues[user_id].get()
             if data is None: break
                 
-            uploader = app if (Config.STRING_SESSION and data['file_size'] > 2000 * 1024 * 1024) else worker_client
+            uploader = app if (getattr(Config, 'STRING_SESSION', None) and data['file_size'] > 2000 * 1024 * 1024) else worker_client
             is_main_bot = (uploader == main_client)
             
             try:
@@ -313,15 +326,15 @@ async def upload_worker(main_client, worker_client, user_id):
                 if not is_main_bot:
                     filw, error = await upload_files(
                         uploader, 
-                        Config.LOG_CHANNEL if uploader == app else Config.LOG_CHANNEL, 
+                        Config.LOG_CHANNEL, 
                         data['upload_type'], data['file_path'], data['ph_path'], 
                         data['caption'], data['duration'], data['rkn_processing']
                     )
 
                     if not error and filw:
                         await asyncio.sleep(2)
-                        await main_client.copy_message(user_id, filw.chat.id, filw.id)
-                        try: await main_client.delete_messages(filw.chat.id, filw.id)
+                        await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                        try: await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
                         except: pass
                 else:
                     filw, error = await upload_files(
@@ -332,9 +345,9 @@ async def upload_worker(main_client, worker_client, user_id):
                     )
 
                 if not error:
-                    is_premium = await digital_botz.check_premium(user_id)
-                    if not is_premium:
-                        await digital_botz.update_daily_limit(user_id, data['file_size'])
+                    # --- FIXED: Active Leaderboard Tracking for EVERYONE ---
+                    await digital_botz.update_daily_limit(user_id, data['file_size'])
+                    # -------------------------------------------------------
                     
                     # 🎉 TASK COMPLETE: Delete from DB so it doesn't resume!
                     await digital_botz.delete_task(data['task_id'])
