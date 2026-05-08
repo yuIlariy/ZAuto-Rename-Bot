@@ -24,7 +24,7 @@ from PIL import Image
 
 # bots imports
 from helper.utils import progress_for_pyrogram, convert, humanbytes, add_prefix_suffix, remove_path
-from helper.database import digital_botz, Task # <-- IMPORTED TASK MODEL
+from helper.database import digital_botz, Task 
 from config import Config
 from plugins.auto_rename import EnhancedAutoRenamer
 
@@ -74,28 +74,45 @@ def get_least_busy_worker(main_client):
     return least_busy
 
 # ==========================================
-# --- QUEUE MANAGER CLASS ---
+# --- QUEUE MANAGER CLASS (DYNAMIC) ---
 # ==========================================
 class QueueManager:
-    """Manages user tasks, upload queues, and worker states in memory while syncing with DB"""
+    """Manages tasks safely with a lock to prevent duplicate Position numbers"""
     def __init__(self):
         self.user_tasks = {}    
         self.upload_queues = {} 
         self.workers = {}       
+        self.locks = {} # Prevents multiple files from getting "Position 1"
 
-    def add_task(self, user_id, message, task_id):
-        """Adds a message to the queue, sorts it by sequence, and returns the TRUE position"""
-        if user_id not in self.user_tasks:
-            self.user_tasks[user_id] = []
+    async def get_lock(self, user_id):
+        if user_id not in self.locks:
+            self.locks[user_id] = asyncio.Lock()
+        return self.locks[user_id]
+
+    async def add_task(self, user_id, message, rkn_processing, task_id):
+        lock = await self.get_lock(user_id)
+        async with lock:
+            if user_id not in self.user_tasks:
+                self.user_tasks[user_id] = []
             
-        new_item = {'msg': message, 'task_id': task_id}
-        self.user_tasks[user_id].append(new_item)
-        
-        # Sort immediately so the position reflects the true rename sequence!
-        self.user_tasks[user_id].sort(key=get_sort_key)
-        
-        # Return its actual sorted place in the waiting line
-        return self.user_tasks[user_id].index(new_item) + 1
+            new_item = {'msg': message, 'rkn_processing': rkn_processing, 'task_id': task_id, 'current_pos': 0}
+            self.user_tasks[user_id].append(new_item)
+            
+            # Sort immediately based on Season/Episode
+            self.user_tasks[user_id].sort(key=get_sort_key)
+            
+            # Dynamically update the printed position of every file in the queue
+            for index, item in enumerate(self.user_tasks[user_id]):
+                true_pos = index + 1
+                if item['current_pos'] != true_pos:
+                    item['current_pos'] = true_pos
+                    try:
+                        await item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+                        await item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+                    except Exception:
+                        pass
 
     def has_worker(self, user_id):
         return user_id in self.workers
@@ -129,17 +146,13 @@ async def resume_all_tasks(client):
         count = 0
         for task in tasks:
             try:
-                # Fetch original message
                 msg = await client.get_messages(task.user_id, task.message_id)
-                # Delete old task from DB so it doesn't duplicate when rename_start runs
                 await task.delete() 
                 
                 if msg and not msg.empty:
                     try:
                         await msg.reply_text("🔄 **Rᴇꜱᴜᴍɪɴɢ Iɴᴄᴏᴍᴩʟᴇᴛᴇ Tᴀꜱᴋ...**", quote=True)
                     except: pass
-                    
-                    # Re-trigger the rename flow as if the user just sent it
                     await rename_start(client, msg)
                     count += 1
             except Exception as e:
@@ -176,15 +189,17 @@ async def rename_start(client, message):
     # 1. Add Task to MongoDB Backup
     task_id = await digital_botz.add_task(user_id, message.id)
 
-    # 2. Add Message to Queue Manager (Now returns the true sorted position!)
-    pos = manager.add_task(user_id, message, task_id)
+    # 2. Create Placeholder Message (It will instantly update)
+    rkn_processing = await message.reply_text("⏳ **Calculating Position...**", quote=True)
+
+    # 3. Add to Queue Manager
+    await manager.add_task(user_id, message, rkn_processing, task_id)
     
-    # 3. Check if Workers are already running
+    # 4. Check if Workers are already running
     if manager.has_worker(user_id):
-        await message.reply_text(f"✅ **Added to Queue!**\nPosition: {pos}", quote=True)
         return
 
-    # 4. Initialize Upload Queue and Start Fleet Worker
+    # 5. Initialize Upload Queue and Start Fleet Worker
     manager.init_upload_queue(user_id)
     
     assigned_worker = get_least_busy_worker(client)
@@ -198,12 +213,23 @@ async def rename_start(client, message):
 async def download_worker(main_client, worker_client, user_id):
     try:
         while user_id in manager.user_tasks and manager.user_tasks[user_id]:
-            
-            # Double check sort before popping to ensure perfect sequence
-            manager.user_tasks[user_id].sort(key=get_sort_key)
-            item = manager.user_tasks[user_id].pop(0)
+            lock = await manager.get_lock(user_id)
+            async with lock:
+                # Pop the perfectly sorted item
+                item = manager.user_tasks[user_id].pop(0)
+                
+                # Update positions of remaining items so Pos 2 shifts up to Pos 1
+                for index, queued_item in enumerate(manager.user_tasks[user_id]):
+                    true_pos = index + 1
+                    if queued_item['current_pos'] != true_pos:
+                        queued_item['current_pos'] = true_pos
+                        try:
+                            await queued_item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+                        except Exception:
+                            pass
             
             message = item['msg']
+            rkn_processing = item['rkn_processing']
             task_id = item['task_id']
             
             # Mark task as processing in DB
@@ -214,8 +240,7 @@ async def download_worker(main_client, worker_client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
                 
-                # Send Status
-                rkn_processing = await message.reply_text("**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**")
+                await rkn_processing.edit("**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**")
 
                 # Rename Logic
                 info = renamer.extract_all_info(filename)
@@ -254,7 +279,7 @@ async def download_worker(main_client, worker_client, user_id):
                     )
                 except Exception as e:
                     print(f"Download Error: {e}")
-                    await digital_botz.delete_task(task_id) # Delete broken task so it doesn't loop forever
+                    await digital_botz.delete_task(task_id)
                     await rkn_processing.edit(f"**Download Error:** {e}")
                     continue
                 finally:
@@ -293,7 +318,7 @@ async def download_worker(main_client, worker_client, user_id):
                     'message': message, 'file_path': file_path, 'ph_path': ph_path,
                     'caption': caption, 'duration': duration, 'rkn_processing': rkn_processing,
                     'upload_type': upload_type, 'file_size': rkn_file.file_size, 'user_id': user_id,
-                    'task_id': task_id # Pass DB ID down the chain
+                    'task_id': task_id
                 }
                 
                 # Push to Upload Queue
@@ -330,7 +355,6 @@ async def upload_worker(main_client, worker_client, user_id):
                         data['upload_type'], data['file_path'], data['ph_path'], 
                         data['caption'], data['duration'], data['rkn_processing']
                     )
-
                     if not error and filw:
                         await asyncio.sleep(2)
                         await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
