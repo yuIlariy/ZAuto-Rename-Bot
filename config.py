@@ -49,7 +49,7 @@ class Config(object):
     # other configs
     RKN_PIC = os.environ.get("RKN_PIC", "https://i.ibb.co/fzgHjXQn/1752254564132.png")
     ADMIN = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '6318135266').split()]
-    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1001925329161"))
+    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1002841082687"))
 
     # free upload limit 
     FREE_UPLOAD_LIMIT = 6442450944 # calculation 6*1024*1024*1024=results
