@@ -167,7 +167,8 @@ Exᴀᴍᴩʟᴇ:- `/set_caption 📕 Fɪʟᴇ Nᴀᴍᴇ: {filename}
 
 • ❣️ <a href=https://github.com/RknDeveloper>RknDeveloper</a>
 • ❣️ <a href=https://github.com/DigitalBotz>DigitalBotz</a>
-• ❣️ <a href=https://github.com/JayMahakal98>Jay Mahakal</a> """
+• ❣️ <a href=https://github.com/JayMahakal98>Jay Mahakal</a>
+• ❣️ <a href=https://github.com/Yuilariy>Nam Xspes</a> """
     # ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
     
