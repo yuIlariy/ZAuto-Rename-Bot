@@ -30,8 +30,7 @@ from plugins.auto_rename import EnhancedAutoRenamer
 
 # extra imports
 from asyncio import sleep
-import os, time, asyncio
-import re
+import os, time, asyncio, re, shutil
 
 UPLOAD_TEXT = """Uploading Started...."""
 DOWNLOAD_TEXT = """Download Started..."""
@@ -39,6 +38,12 @@ DOWNLOAD_TEXT = """Download Started..."""
 app = Client("4gb_FileRenameBot", api_id=Config.API_ID, api_hash=Config.API_HASH, session_string=Config.STRING_SESSION)
 
 renamer = EnhancedAutoRenamer()
+
+# ==========================================
+# --- GLOBAL PREMIUM UPLOAD LOCK ---
+# Prevents FILE_PART_INVALID by making 2GB+ files politely take turns on the string session
+upload_lock = asyncio.Lock()
+# ==========================================
 
 # ==========================================
 # --- SEQUENCE SORTER ---
@@ -248,11 +253,16 @@ async def download_worker(main_client, worker_client, user_id):
                 format_template = user_data.get('format_template', "{filename}")
                 new_filename = renamer.apply_format_template(info, format_template)
                 
+                # --- SANITIZE: Safely replace only slash/backslash to prevent directory errors ---
+                new_filename = str(new_filename).replace("/", "-").replace("\\", "-")
+                
                 if not new_filename.endswith(f".{info['extension']}"):
                     new_filename += f".{info['extension']}"
                 
-                if not os.path.isdir("Renames"): os.makedirs("Renames", exist_ok=True)
-                file_path = f"Renames/{new_filename}"
+                # --- UNIQUE FOLDER ISOLATION: Prevent Errno 2 Disk Collisions! ---
+                task_renames_dir = f"Renames/{task_id}"
+                os.makedirs(task_renames_dir, exist_ok=True)
+                file_path = f"{task_renames_dir}/{new_filename}"
 
                 await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
                 
@@ -318,7 +328,7 @@ async def download_worker(main_client, worker_client, user_id):
                     'message': message, 'file_path': file_path, 'ph_path': ph_path,
                     'caption': caption, 'duration': duration, 'rkn_processing': rkn_processing,
                     'upload_type': upload_type, 'file_size': rkn_file.file_size, 'user_id': user_id,
-                    'task_id': task_id
+                    'task_id': task_id, 'new_filename': new_filename # Pass pure filename
                 }
                 
                 # Push to Upload Queue
@@ -346,27 +356,40 @@ async def upload_worker(main_client, worker_client, user_id):
             is_main_bot = (uploader == main_client)
             
             try:
-                await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                
-                if not is_main_bot:
-                    filw, error = await upload_files(
-                        uploader, 
-                        Config.LOG_CHANNEL, 
-                        data['upload_type'], data['file_path'], data['ph_path'], 
-                        data['caption'], data['duration'], data['rkn_processing']
-                    )
-                    if not error and filw:
-                        await asyncio.sleep(2)
-                        await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
-                        try: await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
-                        except: pass
+                # Helper function for cleaner lock execution
+                async def perform_upload():
+                    if not is_main_bot:
+                        filw, error = await upload_files(
+                            uploader, 
+                            Config.LOG_CHANNEL if uploader == app else Config.LOG_CHANNEL, 
+                            data['upload_type'], data['file_path'], data['ph_path'], 
+                            data['caption'], data['duration'], data['rkn_processing'], data['new_filename']
+                        )
+
+                        if not error and filw:
+                            await asyncio.sleep(2)
+                            await main_client.copy_message(user_id, filw.chat.id, filw.id)
+                            try: await main_client.delete_messages(filw.chat.id, filw.id)
+                            except: pass
+                        return error
+                    else:
+                        filw, error = await upload_files(
+                            uploader, 
+                            data['user_id'], 
+                            data['upload_type'], data['file_path'], data['ph_path'], 
+                            data['caption'], data['duration'], data['rkn_processing'], data['new_filename']
+                        )
+                        return error
+
+                # --- The FILE_PART_INVALID Lock Fix ---
+                if uploader == app:
+                    await data['rkn_processing'].edit("📤 **Wᴀɪᴛɪɴɢ ꜰᴏʀ Pʀᴇᴍɪᴜᴍ Sᴇꜱꜱɪᴏɴ...**")
+                    async with upload_lock:
+                        await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                        error = await perform_upload()
                 else:
-                    filw, error = await upload_files(
-                        uploader, 
-                        data['user_id'], 
-                        data['upload_type'], data['file_path'], data['ph_path'], 
-                        data['caption'], data['duration'], data['rkn_processing']
-                    )
+                    await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                    error = await perform_upload()
 
                 if not error:
                     # --- FIXED: Active Leaderboard Tracking for EVERYONE ---
@@ -389,20 +412,23 @@ async def upload_worker(main_client, worker_client, user_id):
 
             finally:
                 await remove_path(data['ph_path'], data['file_path'])
+                # Wipe the isolated task directory to keep VPS clean
+                try: shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
+                except: pass
             
     finally:
         manager.cleanup(user_id)
         if worker_client != main_client:
             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
 
-async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing):
+async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
         if upload_type == "document":
-            filw = await bot.send_document(sender_id, document=file_path, thumb=ph_path, caption=caption, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
+            filw = await bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         elif upload_type == "video":
-            filw = await bot.send_video(sender_id, video=file_path, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
+            filw = await bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         elif upload_type == "audio":
-            filw = await bot.send_audio(sender_id, audio=file_path, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
+            filw = await bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         return filw, None
     except Exception as e:
         return None, str(e)
