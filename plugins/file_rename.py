@@ -151,14 +151,32 @@ async def resume_all_tasks(client):
         count = 0
         for task in tasks:
             try:
+                # 1. NEW: INSTANTLY DELETE THE OLD FROZEN PROGRESS BAR!
+                if getattr(task, "processing_msg_id", 0) != 0:
+                    try:
+                        await client.delete_messages(task.user_id, task.processing_msg_id)
+                    except:
+                        pass
+
                 msg = await client.get_messages(task.user_id, task.message_id)
                 await task.delete() 
                 
                 if msg and not msg.empty:
+                    resuming_msg = None
                     try:
-                        await msg.reply_text("🔄 **Rᴇꜱᴜᴍɪɴɢ Iɴᴄᴏᴍᴩʟᴇᴛᴇ Tᴀꜱᴋ...**", quote=True)
+                        resuming_msg = await msg.reply_text("🔄 **Rᴇꜱᴜᴍɪɴɢ Iɴᴄᴏᴍᴩʟᴇᴛᴇ Tᴀꜱᴋ...**", quote=True)
                     except: pass
+                    
                     await rename_start(client, msg)
+                    
+                    # 2. NEW: SILENT NINJA AUTO-DELETE THE "RESUMING" MESSAGE
+                    if resuming_msg:
+                        async def auto_delete(m):
+                            await asyncio.sleep(3) # Let it show for 3 seconds
+                            try: await m.delete()
+                            except: pass
+                        asyncio.create_task(auto_delete(resuming_msg))
+                        
                     count += 1
             except Exception as e:
                 print(f"Failed to resume task {task.id}: {e}")
@@ -191,11 +209,11 @@ async def rename_start(client, message):
             return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
     # ------------------------------
 
-    # 1. Add Task to MongoDB Backup
-    task_id = await digital_botz.add_task(user_id, message.id)
-
-    # 2. Create Placeholder Message (It will instantly update)
+    # 1. Generate the progress message FIRST so we have its ID
     rkn_processing = await message.reply_text("⏳ **Calculating Position...**", quote=True)
+
+    # 2. Add Task to MongoDB Backup WITH the processing message ID
+    task_id = await digital_botz.add_task(user_id, message.id, rkn_processing.id)
 
     # 3. Add to Queue Manager
     await manager.add_task(user_id, message, rkn_processing, task_id)
