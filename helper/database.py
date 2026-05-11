@@ -14,7 +14,7 @@ Copyright (c) 2025 @Digital_Botz
 # database imports
 import datetime, time, pytz
 from typing import Optional, List
-from pymongo import AsyncMongoClient # <--- THE FIX (Replaced motor)
+from pymongo import AsyncMongoClient 
 from pydantic import BaseModel, Field
 from beanie import Document, init_beanie
 from config import Config
@@ -44,7 +44,7 @@ class User(Document):
     format_template: str = "{filename}"
     is_premium: bool = False
     premium_expiry: Optional[str] = None
-    notified_24h: bool = False  # <--- NEW: Flag for 24-hour expiry notification
+    notified_24h: bool = False  
     daily_upload_bytes: int = 0
     last_upload_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
     ban_status: BanStatus = Field(default_factory=BanStatus)
@@ -65,7 +65,8 @@ class BotStats(Document):
 class Task(Document):
     user_id: int
     message_id: int
-    status: str = "pending"  # pending, processing
+    processing_msg_id: int = 0 # <--- NEW: Tracks the progress bar message ID!
+    status: str = "pending"  
     created_at: float = Field(default_factory=time.time)
 
     class Settings:
@@ -83,7 +84,6 @@ class Database:
         
     async def init_db(self):
         """Must be called during bot startup to initialize Beanie"""
-        # <--- THE FIX: Using PyMongo's native AsyncClient
         self._client = AsyncMongoClient(self.uri)
         self.db = self._client[self.database_name]
         # Initialize the Models
@@ -292,7 +292,7 @@ class Database:
         await user.save()
 
     # ==========================================
-    # --- NEW: GLOBAL MIDNIGHT RESETTER ---
+    # --- GLOBAL MIDNIGHT RESETTER ---
     # ==========================================
     async def global_daily_reset(self):
         """Wipes the daily_upload_bytes for ALL users instantly at midnight (Kenya Time)."""
@@ -363,9 +363,9 @@ class Database:
     # ==========================================
     # --- PERSISTENT QUEUE (TASK) FUNCTIONS ---
     # ==========================================
-    async def add_task(self, user_id: int, message_id: int):
-        """Adds a message to the persistent MongoDB task queue"""
-        task = Task(user_id=user_id, message_id=message_id)
+    async def add_task(self, user_id: int, message_id: int, processing_msg_id: int = 0):
+        """Adds a message to the persistent MongoDB task queue with the progress message ID"""
+        task = Task(user_id=user_id, message_id=message_id, processing_msg_id=processing_msg_id)
         await task.insert()
         return task.id
 
