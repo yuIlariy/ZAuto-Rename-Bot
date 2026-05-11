@@ -12,12 +12,13 @@ Copyright (c) 2025 @Digital_Botz
 """
 
 # database imports
-import datetime, time
+import datetime, time, pytz
 from typing import Optional, List
 from pymongo import AsyncMongoClient # <--- THE FIX (Replaced motor)
 from pydantic import BaseModel, Field
 from beanie import Document, init_beanie
 from config import Config
+from helper.utils import send_log
 
 # ==========================================
 # --- BEANIE & PYDANTIC MODELS ---
@@ -262,7 +263,8 @@ class Database:
         if not user: return True
         if await self.check_premium(user_id): return True
             
-        today = datetime.date.today().isoformat()
+        tz = pytz.timezone("Africa/Nairobi")
+        today = datetime.datetime.now(tz).date().isoformat()
         if user.last_upload_date != today:
             user.daily_upload_bytes = 0
             user.last_upload_date = today
@@ -275,7 +277,8 @@ class Database:
         user = await User.get(user_id)
         if not user: return
             
-        today = datetime.date.today().isoformat()
+        tz = pytz.timezone("Africa/Nairobi")
+        today = datetime.datetime.now(tz).date().isoformat()
         if user.last_upload_date != today:
             user.daily_upload_bytes = 0
             user.last_upload_date = today
@@ -287,6 +290,25 @@ class Database:
         # ------------------------------------
         
         await user.save()
+
+    # ==========================================
+    # --- NEW: GLOBAL MIDNIGHT RESETTER ---
+    # ==========================================
+    async def global_daily_reset(self):
+        """Wipes the daily_upload_bytes for ALL users instantly at midnight (Kenya Time)."""
+        try:
+            tz = pytz.timezone("Africa/Nairobi")
+            now_kenya = datetime.datetime.now(tz)
+            today_str = now_kenya.date().isoformat()
+
+            # Instant wipe using MongoDB atomic updates
+            await self.db["user"].update_many(
+                {}, 
+                {"$set": {"daily_upload_bytes": 0, "last_upload_date": today_str}}
+            )
+            print("✅ Successfully wiped daily limits for all users.")
+        except Exception as e:
+            print(f"Error during global daily reset: {e}")
 
     # ==========================================
     # --- 24-HOUR EXPIRY NOTIFICATION UTILS ---
@@ -327,7 +349,7 @@ class Database:
         """Fetches the top users for the leaderboard. lb_type can be 'lifetime' or 'daily'"""
         if lb_type == "lifetime":
             # SELF-HEALING MIGRATION: 
-            # If a user's daily limit is higher than lifetime (due to recent update), instantly sync them!
+            # If a user's daily limit is higher than lifetime (due to recent update), instantly sync them in DB!
             await self.db["user"].update_many(
                 {"$expr": {"$lt": ["$lifetime_upload_bytes", "$daily_upload_bytes"]}},
                 [{"$set": {"lifetime_upload_bytes": "$daily_upload_bytes"}}]
