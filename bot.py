@@ -138,6 +138,33 @@ class DigitalAutoRenameBot(Client):
 digital_instance = DigitalAutoRenameBot()
 
 # ==========================================
+# --- GLOBAL MIDNIGHT RESET TASK ---
+# ==========================================
+async def daily_reset_task():
+    """Background task to reset daily upload limits for all users at exactly Midnight."""
+    tz = pytz.timezone("Africa/Nairobi")
+    while True:
+        try:
+            now = datetime.datetime.now(tz)
+            tomorrow = now.date() + datetime.timedelta(days=1)
+            next_midnight = tz.localize(datetime.datetime.combine(tomorrow, datetime.time.min))
+            
+            seconds_until_midnight = (next_midnight - now).total_seconds()
+            
+            # Sleep until exactly midnight
+            await asyncio.sleep(seconds_until_midnight)
+            
+            print(f"[{datetime.datetime.now(tz)}] Executing Global Midnight Stats Reset...")
+            await digital_botz.global_daily_reset()
+            print("✅ Global Midnight Reset Complete!")
+            
+            # Sleep for 60 seconds to ensure we don't accidentally double-trigger
+            await asyncio.sleep(60)
+        except Exception as e:
+            print(f"Error in daily_reset_task: {e}")
+            await asyncio.sleep(60) # Sleep for a bit before retrying if there's an error
+
+# ==========================================
 # --- 24 HOUR EXPIRY NOTIFIER TASK ---
 # ==========================================
 async def premium_expiry_notifier(client):
@@ -211,9 +238,10 @@ def main():
         await resume_all_tasks(digital_instance)
         # ---------------------------------------
 
-        # --- START PREMIUM EXPIRY NOTIFIER ---
+        # --- START BACKGROUND TASKS ---
         asyncio.create_task(premium_expiry_notifier(digital_instance))
-        # -------------------------------------
+        asyncio.create_task(daily_reset_task())
+        # ------------------------------
 
         # Idle mode start karo
         await idle()
