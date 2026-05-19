@@ -31,6 +31,9 @@ License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/
 
 # extra imports
 import os, aiohttp, asyncio, warnings, pytz, datetime
+import uvloop
+uvloop.install()
+
 import logging
 import logging.config
 import glob, sys
