@@ -11,3 +11,4 @@ pytz==2025.2
 psutil==7.2.1
 ffmpeg-python
 ffmpeg
+uvloop>=0.22.1
