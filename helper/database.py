@@ -49,6 +49,10 @@ class User(Document):
     last_upload_date: str = Field(default_factory=lambda: datetime.date.today().isoformat())
     ban_status: BanStatus = Field(default_factory=BanStatus)
 
+    # --- METADATA FIELDS ---
+    metadata_mode: bool = False
+    metadata_code: str = "--change-title @Digital_Botz --change-video-title @Digital_Botz --change-audio-title @Digital_Botz --change-subtitle-title @Digital_Botz --change-author @Digital_Botz"
+
     class Settings:
         name = "user"  # Target MongoDB Collection name
 
@@ -184,6 +188,29 @@ class Database:
     async def get_format_template(self, user_id: int):
         user = await User.get(user_id)
         return user.format_template if user else None
+
+    # ==========================================
+    # --- METADATA UTILS ---
+    # ==========================================
+    async def set_metadata_mode(self, id: int, bool_meta: bool):
+        user = await User.get(id)
+        if user:
+            user.metadata_mode = bool_meta
+            await user.save()
+
+    async def get_metadata_mode(self, id: int):
+        user = await User.get(id)
+        return user.metadata_mode if user else False
+
+    async def set_metadata_code(self, id: int, metadata_code: str):
+        user = await User.get(id)
+        if user:
+            user.metadata_code = metadata_code
+            await user.save()
+
+    async def get_metadata_code(self, id: int):
+        user = await User.get(id)
+        return user.metadata_code if user else "--change-title @Digital_Botz --change-video-title @Digital_Botz --change-audio-title @Digital_Botz --change-subtitle-title @Digital_Botz --change-author @Digital_Botz"
 
     # --- PERSISTENT BOT STATUS FUNCTIONS ---
     async def get_bot_stats(self):
