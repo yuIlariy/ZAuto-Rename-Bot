@@ -51,7 +51,7 @@ class User(Document):
 
     # --- METADATA FIELDS ---
     metadata_mode: bool = False
-    metadata_code: str = "--change-title @Digital_Botz --change-video-title @Digital_Botz --change-audio-title @Digital_Botz --change-subtitle-title @Digital_Botz --change-author @Digital_Botz"
+    metadata_code: str = "--change-title @OtherBs --change-video-title @OtherBs --change-audio-title @OtherBs --change-subtitle-title @OtherBs --change-author @OtherBs"
 
     class Settings:
         name = "user"  # Target MongoDB Collection name
@@ -210,7 +210,7 @@ class Database:
 
     async def get_metadata_code(self, id: int):
         user = await User.get(id)
-        return user.metadata_code if user else "--change-title @Digital_Botz --change-video-title @Digital_Botz --change-audio-title @Digital_Botz --change-subtitle-title @Digital_Botz --change-author @Digital_Botz"
+        return user.metadata_code if user else "--change-title @OtherBs --change-video-title @OtherBs --change-audio-title @OtherBs --change-subtitle-title @OtherBs --change-author @OtherBs"
 
     # --- PERSISTENT BOT STATUS FUNCTIONS ---
     async def get_bot_stats(self):
