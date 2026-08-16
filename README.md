@@ -71,6 +71,7 @@
 * Force subscribe available.
 * Supports ulimited auto renaming at a time.
 * Admin Command Available.
+* Premium subscription available.
 * handle ban/unban members using command.
 * Deploy to Koyeb + Heroku + Railway + Render.
 * Developer Service 24x7. 🔥
