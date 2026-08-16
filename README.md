@@ -50,6 +50,7 @@
 ## Rᴇǫᴜɪʀᴇᴅ Cᴏɴғɪɢs
 
 * `BOT_TOKEN`  - Get Bot Token From @BotFather
+* `WORKER_TOKENS` - Get Workers Bot Tokens From @BotFather
 * `API_ID` - From my.telegram.org
 * `API_HASH` - From my.telegram.org
 * `ADMIN` - AUTH Or Bot Controllers Id's Multiple Id Use Space To Split 
@@ -77,20 +78,26 @@
 
 ## Botfather Commands
 ```
-start - 𝖈ʜᴇᴄᴋ 𝖎 𝖆ᴍ ʟɪᴠᴇ.
-view_thumb - 𝖙ᴏ 𝖘ᴇᴇ 𝖞ᴏᴜʀ 𝖈ᴜ𝖘ᴛᴏᴍ 𝖙ʜᴜᴍʙɴᴀɪʟ !!
-del_thumb - 𝖙ᴏ 𝖉ᴇʟᴇᴛᴇ 𝖞ᴏᴜʀ 𝖈ᴜ𝖘ᴛᴏᴍ 𝖙ʜᴜᴍʙɴᴀɪʟ !!
-set_caption - Sᴇᴛ A Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-see_caption - Sᴇᴇ Yᴏᴜʀ Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-del_caption - Dᴇʟᴇᴛᴇ Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-autorename - Set Custom Format (auto renaming process) 
-restart - ᴛᴏ ʀᴇsᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ᴀɴᴅ sᴇɴᴅ ᴍᴇssᴀɢᴇ ᴀʟʟ ᴅʙ ᴜsᴇʀs (Aᴅᴍɪɴ Oɴʟʏ)
-ban - ban members using command (admin only)
-unban - unban members using command (admin only)
-banned_users - check bot all ban users using command (admin only)
-logs - ᴄʜᴇᴄᴋ ʙᴏᴛ ʟᴏɢs (Aᴅᴍɪɴ Oɴʟʏ)
-status - Cʜᴇᴄᴋ Bᴏᴛ Sᴛᴀᴛᴜs (Aᴅᴍɪɴ Oɴʟʏ)
-broadcast - Sᴇɴᴅ Mᴇssᴀɢᴇ Tᴏ Aʟʟ Usᴇʀs (Aᴅᴍɪɴ Oɴʟʏ)
+start - ⚡️ Check if the bot is alive
+myplan - 📋 Check your plan and expiry details
+plans - 💎 View premium subscription plans
+upgrade - 🚀 Upgrade to premium for higher limits
+view_thumb - 🖼️ View your custom thumbnail
+del_thumb - 🗑️ Delete your custom thumbnail
+set_caption - 📝 Set a custom caption
+see_caption - 👁️ See your custom caption
+del_caption - ❌ Delete your custom caption
+autorename - ⚙️ Set custom auto-rename format
+metadata - 🎉 Set or change metadata code.
+status - 📊 Check bot status (Admin Only)
+addprem - ➕ Add premium to a user (Admin Only)
+rmprem - ➖ Remove premium from a user (Admin Only)
+restart - 🔄 Restart bot and notify users (Admin Only)
+broadcast - 📢 Send message to all users (Admin Only)
+ban - 🚫 Ban a user from the bot (Admin Only)
+unban - ✅ Unban a user (Admin Only)
+banned_users - 📜 Check list of banned users (Admin Only)
+logs - 📑 Check bot logs (Admin Only)
 ```
 
 ## Note:
