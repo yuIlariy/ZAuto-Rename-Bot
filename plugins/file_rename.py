@@ -385,10 +385,38 @@ async def upload_worker(main_client, worker_client, user_id):
                         )
 
                         if not error and filw:
-                            await asyncio.sleep(2)
-                            await main_client.copy_message(user_id, filw.chat.id, filw.id)
-                            try: await main_client.delete_messages(filw.chat.id, filw.id)
-                            except: pass
+                            await asyncio.sleep(1.5)
+                            try:
+                                delivered = False
+                                while not delivered:
+                                    try:
+                                        await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                                        delivered = True
+                                    except FloodWait as fw:
+                                        await asyncio.sleep(fw.value)
+                                    except Exception:
+                                        try:
+                                            await uploader.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                                            delivered = True
+                                        except Exception:
+                                            delivered = True 
+                            finally:
+                                for attempt in range(3):
+                                    try:
+                                        await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                        break
+                                    except FloodWait:
+                                        try:
+                                            await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                            break
+                                        except Exception:
+                                            pass
+                                    except Exception:
+                                        try:
+                                            await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                            break
+                                        except Exception:
+                                            pass
                         return error
                     else:
                         filw, error = await upload_files(
