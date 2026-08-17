@@ -13,7 +13,8 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
+from pyrogram.errors import MessageNotModified
 from datetime import datetime
 import asyncio
 from helper.database import digital_botz
@@ -169,57 +170,87 @@ async def set_format_command(client: Client, message: Message):
     """Set auto rename format template"""
     user_id = message.from_user.id
     
-    if len(message.command) < 2:
-        current_format = await digital_botz.get_format_template(user_id)
-        reply_text = f"📝 **Your Current Format:**\n`{current_format}`\n\n" if current_format else "❌ No format set yet!\n\n"
-        
-        reply_text += "**Available Placeholders:**\n"
-        placeholders = [
-            "`{filename}` - Original File Name.", 
-            "`{title}` - Movie/Series title",
-            "`{year}` - Release year",
-            "`{season}` - Season number (S01)",
-            "`{episode}` - Episode number (E01)",
-            "`{quality}` - Video quality (1080p, 4K)",
-            "`{source}` - Source type (BluRay, WEBRip)",
-            "`{video_codec}` - Video codec (x264, x265)",
-            "`{audio_codec}` - Audio codec (DD+5.1)",
-            "`{language}` - Language (Hindi, English)",
-            "`{bit_depth}` - Bit depth (10bit)",
-            "`{hdr}` - HDR info",
-            "`{ext}` - File extension"
-        ]
-        
-        reply_text += "\n".join(placeholders)
-        reply_text += "\n\n**Usage:** `/autorename {title} ({year}) {quality} {language}.{ext}`"
-        
-        buttons = [
-            [InlineKeyboardButton("🎬 Movie Format", callback_data="format_movie"), InlineKeyboardButton("📺 Series Format", callback_data="format_series")],
-            [InlineKeyboardButton("🎵 Music Format", callback_data="format_music"), InlineKeyboardButton("📄 Document Format", callback_data="format_doc")],
-            [InlineKeyboardButton("✍️ Custom Format", callback_data="format_custom")]
-        ]
-        
-        await message.reply_text(reply_text, reply_markup=InlineKeyboardMarkup(buttons))
+    # Check if the user passed a direct format via command (e.g. /autorename {title} {quality})
+    if len(message.command) > 1:
+        format_template = " ".join(message.command[1:])
+        await digital_botz.add_user_format_template(user_id, format_template)
+        await message.reply_text(f"✅ Format set successfully!\n\n`{format_template}`")
         return
+        
+    current_format = await digital_botz.get_format_template(user_id)
+    reply_text = f"📝 **Your Current Format:**\n`{current_format}`\n\n" if current_format else "❌ No format set yet!\n\n"
     
-    format_template = " ".join(message.command[1:])
-    await digital_botz.add_user_format_template(user_id, format_template)
-    await message.reply_text(f"✅ Format set successfully!\n\n`{format_template}`")
+    reply_text += "**Available Placeholders:**\n"
+    placeholders = [
+        "`{filename}` - Original File Name.", 
+        "`{title}` - Movie/Series title",
+        "`{year}` - Release year",
+        "`{season}` - Season number (S01)",
+        "`{episode}` - Episode number (E01)",
+        "`{quality}` - Video quality (1080p, 4K)",
+        "`{source}` - Source type (BluRay, WEBRip)",
+        "`{video_codec}` - Video codec (x264, x265)",
+        "`{audio_codec}` - Audio codec (DD+5.1)",
+        "`{language}` - Language (Hindi, English)",
+        "`{bit_depth}` - Bit depth (10bit)",
+        "`{hdr}` - HDR info",
+        "`{ext}` - File extension"
+    ]
+    
+    reply_text += "\n".join(placeholders)
+    reply_text += "\n\n**Usage:** `/autorename {title} ({year}) {quality} {language}.{ext}`"
+    
+    buttons = [
+        [InlineKeyboardButton("🎬 Movie Format", callback_data="format_movie"), InlineKeyboardButton("📺 Series Format", callback_data="format_series")],
+        [InlineKeyboardButton("🎵 Music Format", callback_data="format_music"), InlineKeyboardButton("📄 Document Format", callback_data="format_doc")],
+        [InlineKeyboardButton("✍️ Custom Format", callback_data="format_custom")]
+    ]
+    
+    await message.reply_text(reply_text, reply_markup=InlineKeyboardMarkup(buttons))
+
 
 @Client.on_callback_query(filters.regex(r"^format_"))
 async def format_callback(client, callback_query):
-    user_id = callback_query.from_user.id
-    data = callback_query.data
-    
-    formats = {
-        "format_movie": "{title} ({year}) {quality} {source} {video_codec} {language}.{ext}",
-        "format_series": "{title} {season}{episode} {quality} {source} {video_codec}.{ext}",
-        "format_music": "{title} - {language} ({year}).{ext}",
-        "format_doc": "{title} ({quality}).{ext}",
-        "format_custom": "{title} {quality} {language}.{ext}"
-    }
-    
-    if data in formats:
-        await digital_botz.add_user_format_template(user_id, formats[data])
-        await callback_query.message.edit_text(f"✅ Format set to **{data.split('_')[1].title()}**!\n\n`{formats[data]}`")
-    await callback_query.answer()
+    # 1. Instantly unfreeze the button
+    try:
+        await callback_query.answer("Processing...", show_alert=False)
+    except:
+        pass
+
+    try:
+        user_id = callback_query.from_user.id
+        data = callback_query.data
+        
+        formats = {
+            "format_movie": "{title} ({year}) {quality} {source} {video_codec} {language}.{ext}",
+            "format_series": "{title} {season}{episode} {quality} {source} {video_codec}.{ext}",
+            "format_music": "{title} - {language} ({year}).{ext}",
+            "format_doc": "{title} ({quality}).{ext}"
+        }
+        
+        # Handle standard button clicks
+        if data in formats:
+            await digital_botz.add_user_format_template(user_id, formats[data])
+            try:
+                await callback_query.message.edit_text(
+                    f"✅ Format set to **{data.split('_')[1].title()}**!\n\n`{formats[data]}`"
+                )
+            except MessageNotModified:
+                # User tapped the same button twice, silently ignore it
+                pass
+                
+        # Handle the Custom Format button specifically
+        elif data == "format_custom":
+            await callback_query.message.delete()
+            await callback_query.message.reply_text(
+                "✍️ **Please send your custom format template below:**\n\n"
+                "Example: `{title} - {quality} [{language}].{ext}`",
+                reply_markup=ForceReply(True)
+            )
+
+    except Exception as e:
+        print(f"Format Button Error: {e}")
+        try:
+            await callback_query.answer(f"❌ Error: {str(e)}", show_alert=True)
+        except:
+            pass
