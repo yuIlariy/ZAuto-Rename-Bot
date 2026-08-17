@@ -209,7 +209,7 @@ async def set_format_command(client: Client, message: Message):
     await message.reply_text(reply_text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-@Client.on_callback_query(filters.regex(r"^format_"))
+@Client.on_callback_query(filters.regex(r"^format_"), group=1)
 async def format_callback(client, callback_query):
     # 1. Instantly unfreeze the button
     try:
