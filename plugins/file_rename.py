@@ -74,7 +74,6 @@ def get_least_busy_worker(main_client):
         if w not in worker_loads:
             worker_loads[w] = 0
             
-    # Return the worker with the minimum active tasks
     least_busy = min(workers, key=lambda w: worker_loads.get(w, 0))
     return least_busy
 
@@ -96,6 +95,9 @@ class QueueManager:
 
     async def add_task(self, user_id, message, rkn_processing, task_id):
         lock = await self.get_lock(user_id)
+        updates_to_make = []
+        
+        # 🛡️ THE FIX: Only hold the lock while modifying the list in memory
         async with lock:
             if user_id not in self.user_tasks:
                 self.user_tasks[user_id] = []
@@ -109,16 +111,20 @@ class QueueManager:
                 true_pos = index + 1
                 if item['current_pos'] != true_pos:
                     item['current_pos'] = true_pos
-                    try:
-                        await item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
-                        await item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
-                    except Exception:
-                        pass
+                    updates_to_make.append((item['rkn_processing'], true_pos))
+                    
+        # 🛡️ THE FIX: Process all Telegram network edits OUTSIDE the lock to prevent deadlocks
+        for rkn_msg, true_pos in updates_to_make:
+            try:
+                await rkn_msg.edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+                try: await rkn_msg.edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+                except: pass
+            except Exception:
+                pass
 
     def has_worker(self, user_id):
-        # 🛡️ THE FIX: Ensure the worker is ACTUALLY alive to prevent silent freezes
         if user_id in self.workers:
             dl_task = self.workers[user_id].get('dl')
             if dl_task and not dl_task.done():
@@ -126,16 +132,18 @@ class QueueManager:
         return False
 
     def init_upload_queue(self, user_id):
-        if user_id not in self.upload_queues:
-            self.upload_queues[user_id] = asyncio.Queue()
+        # 🛡️ THE FIX: Force recreate the queue for new worker instances
+        self.upload_queues[user_id] = asyncio.Queue()
         return self.upload_queues[user_id]
 
     def register_workers(self, user_id, dl_task, ul_task):
         self.workers[user_id] = {'dl': dl_task, 'ul': ul_task}
 
     def cleanup(self, user_id):
-        # 🛡️ THE FIX: Allow queues to safely persist empty to prevent race condition crashes
-        pass
+        if user_id in self.workers:
+            del self.workers[user_id]
+        if user_id in self.user_tasks and not self.user_tasks[user_id]:
+            del self.user_tasks[user_id]
 
 manager = QueueManager()
 
@@ -225,25 +233,32 @@ async def download_worker(main_client, worker_client, user_id):
     try:
         while True:
             lock = await manager.get_lock(user_id)
+            updates_to_make = []
+            item = None
+            
+            # 🛡️ THE FIX: Only hold the lock while accessing the list
             async with lock:
                 if not manager.user_tasks.get(user_id):
-                    break # Safely exit while holding the lock
+                    break 
                 item = manager.user_tasks[user_id].pop(0)
                 
                 for index, queued_item in enumerate(manager.user_tasks[user_id]):
                     true_pos = index + 1
                     if queued_item['current_pos'] != true_pos:
                         queued_item['current_pos'] = true_pos
-                        try:
-                            await queued_item['rkn_processing'].edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
-                        except Exception:
-                            pass
+                        updates_to_make.append((queued_item['rkn_processing'], true_pos))
+                        
+            # 🛡️ THE FIX: Edit all network messages OUTSIDE the lock
+            for rkn_msg, true_pos in updates_to_make:
+                try:
+                    await rkn_msg.edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
+                except Exception:
+                    pass
             
             message = item['msg']
             rkn_processing = item['rkn_processing']
             task_id = item['task_id']
             
-            # 🛡️ THE FIX: Inner safety loop to catch broken files without crashing the whole queue
             try:
                 await digital_botz.update_task_status(task_id, "processing")
                 
@@ -268,7 +283,6 @@ async def download_worker(main_client, worker_client, user_id):
 
                 await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
                 
-                # 🛡️ THE FIX: Robust Worker-Swapping FloodWait Interceptor
                 dl_path = None
                 log_msg = None
                 attempts = 0
@@ -286,7 +300,7 @@ async def download_worker(main_client, worker_client, user_id):
                             progress=progress_for_pyrogram, 
                             progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
                         )
-                        break # Success
+                        break 
                         
                     except FloodWait as fw:
                         attempts += 1
@@ -375,7 +389,6 @@ async def upload_worker(main_client, worker_client, user_id):
                 uploader = app if (getattr(Config, 'STRING_SESSION', None) and data['file_size'] > 2000 * 1024 * 1024) else worker_client
                 is_main_bot = (uploader == main_client)
                 
-                # 🛡️ THE FIX: Upload FloodWait Re-Assignment Loop
                 upload_attempts = 0
                 while upload_attempts < 3:
                     try:
@@ -503,7 +516,6 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
             filw = await bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()))
         return filw, None
     except FloodWait as fw:
-        # 🛡️ THE FIX: Return FloodWait data specifically so the worker-swapper can catch it
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
         return None, str(e)
