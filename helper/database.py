@@ -69,7 +69,7 @@ class BotStats(Document):
 class Task(Document):
     user_id: int
     message_id: int
-    processing_msg_id: int = 0 # <--- NEW: Tracks the progress bar message ID!
+    processing_msg_id: int = 0 
     status: str = "pending"  
     created_at: float = Field(default_factory=time.time)
 
@@ -127,25 +127,43 @@ class Database:
         user = await User.get(user_id)
         if user: await user.delete()
 
+    # ==========================================
+    # --- BULLETPROOF GETTERS & SETTERS ---
+    # ==========================================
+    # Using raw PyMongo to completely bypass Pydantic validation crashes on old users
+    
     async def set_thumbnail(self, id: int, file_id: str):
-        user = await User.get(id)
-        if user:
-            user.file_id = file_id
-            await user.save()
+        await self.db["user"].update_one({"_id": id}, {"$set": {"file_id": file_id}}, upsert=True)
 
     async def get_thumbnail(self, id: int):
-        user = await User.get(id)
-        return user.file_id if user else None
+        user = await self.db["user"].find_one({"_id": id})
+        return user.get("file_id") if user else None
 
     async def set_caption(self, id: int, caption: str):
-        user = await User.get(id)
-        if user:
-            user.caption = caption
-            await user.save()
+        await self.db["user"].update_one({"_id": id}, {"$set": {"caption": caption}}, upsert=True)
         
     async def get_caption(self, id: int):
-        user = await User.get(id)
-        return user.caption if user else None
+        user = await self.db["user"].find_one({"_id": id})
+        return user.get("caption") if user else None
+
+    # ==========================================
+    # --- METADATA UTILS ---
+    # ==========================================
+    async def set_metadata_mode(self, id: int, bool_meta: bool):
+        await self.db["user"].update_one({"_id": id}, {"$set": {"metadata_mode": bool_meta}}, upsert=True)
+
+    async def get_metadata_mode(self, id: int):
+        user = await self.db["user"].find_one({"_id": id})
+        return user.get("metadata_mode", False) if user else False
+
+    async def set_metadata_code(self, id: int, metadata_code: str):
+        await self.db["user"].update_one({"_id": id}, {"$set": {"metadata_code": metadata_code}}, upsert=True)
+
+    async def get_metadata_code(self, id: int):
+        user = await self.db["user"].find_one({"_id": id})
+        default_meta = "--change-title @OtherBs --change-video-title @OtherBs --change-audio-title @OtherBs --change-subtitle-title @OtherBs --change-author @OtherBs"
+        return user.get("metadata_code", default_meta) if user else default_meta
+    # ==========================================
 
     async def get_user_data(self, id: int) -> dict:
         user = await User.get(id)
@@ -177,40 +195,11 @@ class Database:
         return [user.model_dump(by_alias=True) for user in users]
     
     async def add_user_format_template(self, user_id: int, template: str):
-        user = await User.get(user_id)
-        if user:
-            user.format_template = template
-            await user.save()
-        else:
-            user = User(id=user_id, format_template=template)
-            await user.insert()
+        await self.db["user"].update_one({"_id": user_id}, {"$set": {"format_template": template}}, upsert=True)
 
     async def get_format_template(self, user_id: int):
-        user = await User.get(user_id)
-        return user.format_template if user else None
-
-    # ==========================================
-    # --- METADATA UTILS ---
-    # ==========================================
-    async def set_metadata_mode(self, id: int, bool_meta: bool):
-        user = await User.get(id)
-        if user:
-            user.metadata_mode = bool_meta
-            await user.save()
-
-    async def get_metadata_mode(self, id: int):
-        user = await User.get(id)
-        return user.metadata_mode if user else False
-
-    async def set_metadata_code(self, id: int, metadata_code: str):
-        user = await User.get(id)
-        if user:
-            user.metadata_code = metadata_code
-            await user.save()
-
-    async def get_metadata_code(self, id: int):
-        user = await User.get(id)
-        return user.metadata_code if user else "--change-title @OtherBs --change-video-title @OtherBs --change-audio-title @OtherBs --change-subtitle-title @OtherBs --change-author @OtherBs"
+        user = await self.db["user"].find_one({"_id": user_id})
+        return user.get("format_template", "{filename}") if user else "{filename}"
 
     # --- PERSISTENT BOT STATUS FUNCTIONS ---
     async def get_bot_stats(self):
