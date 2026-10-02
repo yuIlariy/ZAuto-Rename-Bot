@@ -372,8 +372,9 @@ async def download_worker(main_client, worker_client, user_id):
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
                 await digital_botz.delete_task(task_id)
-                try: await main_client.send_message(user_id, f"**Error:** {inner_e}", reply_to_message_id=message.id)
-                except: pass
+                if "MESSAGE_ID_INVALID" not in str(inner_e):
+                    try: await main_client.send_message(user_id, f"**Error:** {inner_e}", reply_to_message_id=message.id)
+                    except: pass
             finally:
                 if log_msg:
                     try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
@@ -491,8 +492,9 @@ async def upload_worker(main_client, worker_client, user_id):
                                 
                         elif error:
                             await digital_botz.delete_task(data['task_id'])
-                            try: await main_client.send_message(user_id, f"**Eʀʀᴏʀ:** {error}", reply_to_message_id=data['message'].id)
-                            except: pass
+                            if "MESSAGE_ID_INVALID" not in str(error):
+                                try: await main_client.send_message(user_id, f"**Eʀʀᴏʀ:** {error}", reply_to_message_id=data['message'].id)
+                                except: pass
                             break
                         else:
                             await digital_botz.update_daily_limit(user_id, data['file_size'])
@@ -516,8 +518,9 @@ async def upload_worker(main_client, worker_client, user_id):
             except Exception as inner_e:
                 print(f"Upload Inner Error: {inner_e}")
                 await digital_botz.delete_task(data['task_id'])
-                try: await main_client.send_message(user_id, f"**Upload Error:** {inner_e}", reply_to_message_id=data['message'].id)
-                except: pass
+                if "MESSAGE_ID_INVALID" not in str(inner_e):
+                    try: await main_client.send_message(user_id, f"**Upload Error:** {inner_e}", reply_to_message_id=data['message'].id)
+                    except: pass
             finally:
                 await remove_path(data['ph_path'], data['file_path'])
                 try: shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
