@@ -288,6 +288,35 @@ async def restart_bot(b, m):
         
     os.execl(sys.executable, sys.executable, *sys.argv)
 
+
+@Client.on_message(filters.command(["rmuser", "delete_user", "remove_user"]) & filters.user(Config.ADMIN))
+async def remove_user_from_db(bot, message):
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "📜 **Usage:** `/rmuser user_id`\n\n"
+            "🗑️ **Purpose:** Completely deletes a user from the database so they can start completely fresh."
+        )
+    
+    rkn = await message.reply_text("⏳ **Removing user from database...**")
+    
+    try:
+        target_id = int(message.command[1])
+        
+        # Delete the user completely from MongoDB
+        await digital_botz.delete_user(target_id)
+        
+        await rkn.edit(
+            f"✅ **User Completely Removed!**\n\n"
+            f"👤 **User ID:** `{target_id}`\n"
+            f"🗑️ Their entire profile has been wiped from the database.\n\n"
+            f"Tell them to send `/start` to create a fresh, clean account!"
+        )
+    except ValueError:
+        await rkn.edit("⚠️ **Error:** User ID must be a valid number.")
+    except Exception as e:
+        await rkn.edit(f"⚠️ **Error removing user:** `{e}`")
+
+
 @Client.on_message(filters.private & filters.command("ban") & filters.user(Config.ADMIN))
 async def ban(c: Client, m: Message):
     if len(m.command) == 1:
