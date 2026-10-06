@@ -13,7 +13,7 @@ Copyright (c) 2025 @Digital_Botz
 # pyrogram imports
 from pyrogram import Client, filters
 from pyrogram.enums import MessageMediaType
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, MessageIdInvalid
 from pyrogram.file_id import FileId
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
@@ -87,39 +87,39 @@ class QueueManager:
         self.upload_queues = {} 
         self.workers = {}       
         self.locks = {}
+        self.worker_locks = {} # NEW: Strict lock to prevent freezing when 50 files drop at once
 
     async def get_lock(self, user_id):
         if user_id not in self.locks:
             self.locks[user_id] = asyncio.Lock()
         return self.locks[user_id]
+        
+    async def get_worker_lock(self, user_id):
+        if user_id not in self.worker_locks:
+            self.worker_locks[user_id] = asyncio.Lock()
+        return self.worker_locks[user_id]
 
     async def add_task(self, user_id, message, rkn_processing, task_id):
         lock = await self.get_lock(user_id)
-        updates_to_make = []
         
         async with lock:
             if user_id not in self.user_tasks:
                 self.user_tasks[user_id] = []
             
-            new_item = {'msg': message, 'rkn_processing': rkn_processing, 'task_id': task_id, 'current_pos': 0}
+            new_item = {'msg': message, 'rkn_processing': rkn_processing, 'task_id': task_id}
             self.user_tasks[user_id].append(new_item)
             
+            # Sort the queue so seasons stay in order
             self.user_tasks[user_id].sort(key=get_sort_key)
-            
-            for index, item in enumerate(self.user_tasks[user_id]):
-                true_pos = index + 1
-                if item['current_pos'] != true_pos:
-                    item['current_pos'] = true_pos
-                    updates_to_make.append((item['rkn_processing'], true_pos))
+            total_queued = len(self.user_tasks[user_id])
                     
-        # 🛡️ THE FIX: Smart Edit Fallback. Updates normally, but stays silent if rate-limited.
-        for rkn_msg, true_pos in updates_to_make:
-            try:
-                await rkn_msg.edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
-            except FloodWait:
-                pass # Silently ignore the rate limit and keep the queue moving
-            except Exception:
-                pass
+        # 🛡️ THE FIX: Only edit this specific message once. No massive loops, no massive rate limits!
+        try:
+            await rkn_processing.edit(f"⏳ **Qᴜᴇᴜᴇᴅ...**\n📦 Tᴏᴛᴀʟ ɪɴ Qᴜᴇᴜᴇ: `{total_queued}`")
+        except FloodWait:
+            pass # Silently ignore the rate limit and keep the queue moving
+        except Exception:
+            pass
 
     def has_worker(self, user_id):
         if user_id in self.workers:
@@ -207,52 +207,44 @@ async def rename_start(client, message):
             btn = [[InlineKeyboardButton("💎 Gᴇᴛ Pʀᴇᴍɪᴜᴍ", callback_data="premium_plans")]]
             return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
 
-    # Restored live calculating position text
-    rkn_processing = await message.reply_text("⏳ **Calculating Position...**", quote=True)
+    rkn_processing = await message.reply_text("⏳ **Aᴅᴅɪɴɢ ᴛᴏ Qᴜᴇᴜᴇ...**", quote=True)
     task_id = await digital_botz.add_task(user_id, message.id, rkn_processing.id)
 
     await manager.add_task(user_id, message, rkn_processing, task_id)
     
-    if manager.has_worker(user_id):
-        return
+    # 🛡️ THE FIX: Strict worker lock to prevent the massive concurrent spawn freeze
+    worker_lock = await manager.get_worker_lock(user_id)
+    async with worker_lock:
+        if manager.has_worker(user_id):
+            return
 
-    manager.init_upload_queue(user_id)
-    
-    assigned_worker = get_least_busy_worker(client)
-    if assigned_worker != client:
-        worker_loads[assigned_worker] = worker_loads.get(assigned_worker, 0) + 1
+        manager.init_upload_queue(user_id)
+        
+        assigned_worker = get_least_busy_worker(client)
+        if assigned_worker != client:
+            worker_loads[assigned_worker] = worker_loads.get(assigned_worker, 0) + 1
 
-    dl_task = asyncio.create_task(download_worker(client, assigned_worker, user_id))
-    ul_task = asyncio.create_task(upload_worker(client, assigned_worker, user_id))
-    manager.register_workers(user_id, dl_task, ul_task)
+        dl_task = asyncio.create_task(download_worker(client, assigned_worker, user_id))
+        ul_task = asyncio.create_task(upload_worker(client, assigned_worker, user_id))
+        manager.register_workers(user_id, dl_task, ul_task)
 
 async def download_worker(main_client, worker_client, user_id):
+    processed_count = 0
+    batch_start_time = time.time()
+    
     try:
         while True:
             lock = await manager.get_lock(user_id)
-            updates_to_make = []
             item = None
+            remaining = 0
             
             async with lock:
                 if not manager.user_tasks.get(user_id):
                     break 
                 item = manager.user_tasks[user_id].pop(0)
-                
-                for index, queued_item in enumerate(manager.user_tasks[user_id]):
-                    true_pos = index + 1
-                    if queued_item['current_pos'] != true_pos:
-                        queued_item['current_pos'] = true_pos
-                        updates_to_make.append((queued_item['rkn_processing'], true_pos))
-                        
-            # Smart Edit Fallback
-            for rkn_msg, true_pos in updates_to_make:
-                try:
-                    await rkn_msg.edit(f"✅ **Added to Queue!**\nPosition: {true_pos}")
-                except FloodWait:
-                    pass
-                except Exception:
-                    pass
+                remaining = len(manager.user_tasks[user_id])
             
+            processed_count += 1
             message = item['msg']
             rkn_processing = item['rkn_processing']
             task_id = item['task_id']
@@ -264,8 +256,19 @@ async def download_worker(main_client, worker_client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
                 
+                # 📊 Live Processing Stats UI
+                elapsed_minutes = (time.time() - batch_start_time) / 60.0
+                avg_speed = (processed_count / elapsed_minutes) if elapsed_minutes > 0 else 0.0
+                
+                stats_msg = (
+                    f"**🔄 Pʀᴏᴄᴇꜱꜱɪɴɢ Aᴄᴛɪᴠᴇ...**\n"
+                    f"✅ **Pʀᴏᴄᴇꜱꜱᴇᴅ:** `{processed_count}`\n"
+                    f"⏳ **Rᴇᴍᴀɪɴɪɴɢ:** `{remaining}`\n"
+                    f"⚡ **Aᴠɢ Sᴘᴇᴇᴅ:** `{avg_speed:.1f} ꜰɪʟᴇꜱ/ᴍɪɴ`"
+                )
+                
                 try:
-                    await rkn_processing.edit("**🔄 Aᴜᴛᴏ-Rᴇɴᴀᴍᴇ Sᴛᴀʀᴛᴇᴅ...**\n⏳ **Pʀᴏᴄᴇꜱꜱɪɴɢ...**")
+                    await rkn_processing.edit(stats_msg)
                 except FloodWait:
                     pass
 
@@ -283,7 +286,7 @@ async def download_worker(main_client, worker_client, user_id):
                 file_path = f"{task_renames_dir}/{new_filename}"
 
                 try:
-                    await rkn_processing.edit(f"📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
+                    await rkn_processing.edit(f"{stats_msg}\n\n📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ:**\n`{new_filename}`")
                 except FloodWait:
                     pass
                 
@@ -298,7 +301,6 @@ async def download_worker(main_client, worker_client, user_id):
                         else:
                             target_msg = message
 
-                        # Restored live progress bar updates
                         dl_path = await worker_client.download_media(
                             message=target_msg, 
                             file_name=file_path,
@@ -326,6 +328,8 @@ async def download_worker(main_client, worker_client, user_id):
                             except: pass
                             await asyncio.sleep(fw.value)
                             
+                    except MessageIdInvalid:
+                        raise Exception("Task Cancelled")
                     except Exception as e:
                         raise e 
                 
@@ -356,7 +360,7 @@ async def download_worker(main_client, worker_client, user_id):
                 elif message.media == MessageMediaType.AUDIO: upload_type = "audio"
 
                 try:
-                    await rkn_processing.edit("⏳ **Rᴇᴀᴅy ᴛᴏ Uᴩʟᴏᴀᴅ...**")
+                    await rkn_processing.edit(f"{stats_msg}\n\n⏳ **Rᴇᴀᴅy ᴛᴏ Uᴩʟᴏᴀᴅ...**")
                 except FloodWait:
                     pass
                 
@@ -364,7 +368,7 @@ async def download_worker(main_client, worker_client, user_id):
                     'message': message, 'file_path': file_path, 'ph_path': ph_path,
                     'caption': caption, 'duration': duration, 'rkn_processing': rkn_processing,
                     'upload_type': upload_type, 'file_size': rkn_file.file_size, 'user_id': user_id,
-                    'task_id': task_id, 'new_filename': new_filename 
+                    'task_id': task_id, 'new_filename': new_filename, 'stats_msg': stats_msg
                 }
                 
                 await manager.upload_queues[user_id].put(upload_data)
@@ -372,7 +376,7 @@ async def download_worker(main_client, worker_client, user_id):
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
                 await digital_botz.delete_task(task_id)
-                if "MESSAGE_ID_INVALID" not in str(inner_e):
+                if "MESSAGE_ID_INVALID" not in str(inner_e) and "Task Cancelled" not in str(inner_e):
                     try: await main_client.send_message(user_id, f"**Error:** {inner_e}", reply_to_message_id=message.id)
                     except: pass
             finally:
@@ -399,6 +403,7 @@ async def upload_worker(main_client, worker_client, user_id):
             try:
                 uploader = app if (getattr(Config, 'STRING_SESSION', None) and data['file_size'] > 2000 * 1024 * 1024) else worker_client
                 is_main_bot = (uploader == main_client)
+                stats_msg = data.get('stats_msg', '')
                 
                 upload_attempts = 0
                 while upload_attempts < 3:
@@ -457,18 +462,18 @@ async def upload_worker(main_client, worker_client, user_id):
 
                         if uploader == app:
                             try:
-                                await data['rkn_processing'].edit("📤 **Wᴀɪᴛɪɴɢ ꜰᴏʀ Pʀᴇᴍɪᴜᴍ Sᴇꜱꜱɪᴏɴ...**")
+                                await data['rkn_processing'].edit(f"{stats_msg}\n\n📤 **Wᴀɪᴛɪɴɢ ꜰᴏʀ Pʀᴇᴍɪᴜᴍ Sᴇꜱꜱɪᴏɴ...**")
                             except FloodWait:
                                 pass
                             async with upload_lock:
                                 try:
-                                    await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                                    await data['rkn_processing'].edit(f"{stats_msg}\n\n📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
                                 except FloodWait:
                                     pass
                                 error = await perform_upload()
                         else:
                             try:
-                                await data['rkn_processing'].edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                                await data['rkn_processing'].edit(f"{stats_msg}\n\n📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
                             except FloodWait:
                                 pass
                             error = await perform_upload()
@@ -533,7 +538,6 @@ async def upload_worker(main_client, worker_client, user_id):
         if worker_client != main_client:
             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
 
-# Restored live progress bar updates
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
         if upload_type == "document":
