@@ -169,6 +169,15 @@ manager = QueueManager()
 # ==========================================
 async def resume_all_tasks(client):
     print("🔄 Checking for incomplete tasks to resume...")
+    
+    # 🧹 STARTUP REAPER: Wipes ghost files from previous crashes to save Docker disk space
+    try:
+        shutil.rmtree("Renames", ignore_errors=True)
+        os.makedirs("Renames", exist_ok=True)
+        print("✅ Startup Reaper: Cleared all orphaned temporary data from disk.")
+    except Exception:
+        pass
+
     try:
         tasks = await Task.find_all().to_list()
         count = 0
@@ -325,13 +334,24 @@ async def download_worker(main_client, worker_client, user_id):
                         else:
                             target_msg = message
 
-                        dl_path = await worker_client.download_media(
-                            message=target_msg, 
-                            file_name=file_path,
-                            progress=progress_for_pyrogram, 
-                            progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
+                        # 🛡️ ANTI-FREEZE: 2-Hour maximum timeout per file to prevent permanent socket hangs
+                        dl_path = await asyncio.wait_for(
+                            worker_client.download_media(
+                                message=target_msg, 
+                                file_name=file_path,
+                                progress=progress_for_pyrogram, 
+                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
+                            ),
+                            timeout=7200
                         )
                         break 
+                        
+                    except asyncio.TimeoutError:
+                        attempts += 1
+                        if log_msg:
+                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
+                            except: pass
+                        await asyncio.sleep(5)
                         
                     except FloodWait as fw:
                         attempts += 1
@@ -354,7 +374,7 @@ async def download_worker(main_client, worker_client, user_id):
                         raise e 
                 
                 if not dl_path:
-                    raise Exception("Failed to download file after retries.")
+                    raise Exception("Failed to download file after retries (Network Freeze).")
 
                 duration = 0
                 try:
@@ -391,6 +411,12 @@ async def download_worker(main_client, worker_client, user_id):
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
                 await digital_botz.delete_task(task_id)
+                
+                # 🧹 DOCKER CLEANUP: Instantly wipe the file if download crashes or gets cancelled
+                try: 
+                    shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
+                except: 
+                    pass
                 
                 state = manager.batch_state.get(user_id)
                 if state:
@@ -580,13 +606,16 @@ async def upload_worker(main_client, worker_client, user_id):
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
+        # 🛡️ ANTI-FREEZE: 2-Hour maximum timeout for Telegram API Uploads
         if upload_type == "document":
-            filw = await bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ())
+            filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         elif upload_type == "video":
-            filw = await bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ())
+            filw = await asyncio.wait_for(bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         elif upload_type == "audio":
-            filw = await bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ())
+            filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         return filw, None
+    except asyncio.TimeoutError:
+        return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
