@@ -202,7 +202,7 @@ async def resume_all_tasks(client):
                         except Exception: 
                             pass
                             
-                    msg = await client.get_messages(user_id, getattr(task, "file_msg_id", 0))
+                    msg = await client.get_messages(user_id, task.message_id)
                     await task.delete()
 
                     if msg and not msg.empty:
@@ -255,7 +255,7 @@ async def rename_start(client, message):
             btn = [[InlineKeyboardButton("💎 Gᴇᴛ Pʀᴇᴍɪᴜᴍ", callback_data="premium_plans")]]
             return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
 
-    task_id = await digital_botz.add_task(user_id, message.id, "Auto_Batch", "document", 0)
+    task_id = await digital_botz.add_task(user_id, message.id, 0)
     await manager.add_task(user_id, message, task_id)
     
     worker_lock = await manager.get_worker_lock(user_id)
