@@ -535,13 +535,17 @@ async def upload_worker(main_client, worker_client, user_id):
                                                     await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
                                                     break
                                                 except FloodWait:
-                                                    try: await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
-                                                    break
-                                                    except Exception: pass
+                                                    try:
+                                                        await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                                        break
+                                                    except Exception:
+                                                        pass
                                                 except Exception:
-                                                    try: await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
-                                                    break
-                                                    except Exception: pass
+                                                    try:
+                                                        await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                                        break
+                                                    except Exception:
+                                                        pass
                                     return error
                                 else:
                                     filw, error = await upload_files(
