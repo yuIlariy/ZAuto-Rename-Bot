@@ -179,6 +179,16 @@ async def resume_all_tasks(client):
         pass
 
     try:
+        # Wipes orphaned log channel transit files on reboot
+        async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=50):
+            try: 
+                await old_log.delete()
+            except Exception: 
+                pass
+    except Exception: 
+        pass
+
+    try:
         tasks = await Task.find_all().to_list()
         if not tasks:
             print("✅ No pending tasks to resume.")
