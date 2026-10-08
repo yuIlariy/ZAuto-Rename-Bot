@@ -312,9 +312,11 @@ async def download_worker(main_client, worker_client, user_id):
                 rkn_processing = None
                 try: 
                     rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
+                    await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                 except FloodWait as fw:
                     await asyncio.sleep(fw.value)
                     rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
+                    await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                 except Exception: 
                     pass
                 
