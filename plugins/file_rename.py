@@ -179,12 +179,13 @@ async def resume_all_tasks(client):
         pass
 
     try:
-        # Wipes orphaned log channel transit files on reboot
+        # Batch-delete orphaned media in the Log Channel (ignores text messages)
+        log_msgs = []
         async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=50):
-            try: 
-                await old_log.delete()
-            except Exception: 
-                pass
+            if old_log.media:
+                log_msgs.append(old_log.id)
+        if log_msgs:
+            await client.delete_messages(Config.LOG_CHANNEL, log_msgs)
     except Exception: 
         pass
 
@@ -202,6 +203,19 @@ async def resume_all_tasks(client):
 
         count = 0
         for user_id, user_task_list in user_tasks_map.items():
+            
+            try:
+                # Batch-delete orphaned Batch Status and stuck queues in User PM
+                pm_msgs = []
+                async for old_msg in client.get_chat_history(user_id, limit=30):
+                    text = old_msg.text or ""
+                    if "Bᴀᴛᴄʜ Sᴛᴀᴛᴜꜱ" in text or "Pʀᴇᴘᴀʀɪɴɢ" in text or "Wᴀɪᴛɪɴɢ" in text or "Uᴩʟᴏᴀᴅɪɴɢ" in text or "Dᴏᴡɴʟᴏᴀᴅɪɴɢ" in text:
+                        pm_msgs.append(old_msg.id)
+                if pm_msgs:
+                    await client.delete_messages(user_id, pm_msgs)
+            except Exception:
+                pass
+
             valid_msgs = []
             
             for task in user_task_list:
