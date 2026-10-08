@@ -407,4 +407,11 @@ class Database:
         """Emergency clear all stuck tasks for a user"""
         await Task.find(Task.user_id == user_id).delete()
 
+    async def update_processing_msg(self, task_id, processing_msg_id: int):
+        """Updates the processing message ID for a task after it is generated."""
+        task = await Task.get(task_id)
+        if task:
+            task.processing_msg_id = processing_msg_id
+            await task.save()
+
 digital_botz = Database(Config.DB_URL, Config.DB_NAME)
