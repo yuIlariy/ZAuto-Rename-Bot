@@ -105,6 +105,7 @@
         /* Grid spans for desktop */
         .card-bot { grid-column: span 8; }
         .card-users { grid-column: span 4; }
+        .card-full { grid-column: span 12; } 
         .card-system { grid-column: span 6; }
         .card-network { grid-column: span 6; }
 
@@ -168,6 +169,7 @@
             font-size: 0.8rem;
             color: var(--text-secondary);
             margin-bottom: 0.25rem;
+            white-space: nowrap;
         }
 
         .stat-value {
@@ -175,6 +177,95 @@
             font-weight: 600;
             color: var(--text-primary);
             white-space: nowrap;
+        }
+
+        /* --- Traffic & Processing UI --- */
+        .traffic-layout {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 1.5rem;
+        }
+
+        .processing-block {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(139, 92, 246, 0.05);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 12px;
+        }
+
+        .processing-block .stat-label {
+            color: var(--accent-purple);
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 0;
+        }
+
+        .processing-block .stat-value {
+            font-size: 3rem;
+            margin-top: 0.5rem;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .speed-subcard {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .speed-header {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .speed-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .speed-grid-full {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .speed-row {
+            background: rgba(2, 6, 23, 0.5);
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .speed-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .speed-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         /* Progress Bars */
@@ -275,17 +366,35 @@
 
         /* Responsive */
         @media (max-width: 900px) {
-            .card-bot, .card-users, .card-system, .card-network {
+            .card-bot, .card-users, .card-system, .card-network, .card-full {
                 grid-column: span 12;
             }
         }
         
+        @media (max-width: 600px) {
+            .traffic-layout {
+                grid-template-columns: 1fr;
+            }
+            .processing-block {
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 1.25rem;
+            }
+            .processing-block .stat-value {
+                font-size: 2rem;
+                margin-top: 0;
+            }
+        }
+
         @media (max-width: 480px) {
             .card {
                 padding: 1.25rem;
             }
             .grid-stack-mobile {
                 grid-template-columns: 1fr !important;
+            }
+            .speed-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -299,7 +408,7 @@
 
     <header>
         <h1>Auto Digitals</h1>
-        <p class="tagline">Live Server Metrics & Automation Dashboard</p>
+        <p class="tagline">Server Metrics & Automation Dashboard</p>
     </header>
 
     <main class="dashboard">
@@ -313,7 +422,6 @@
                     <span id="val-bot_status">{{bot_status}}</span>
                 </div>
             </div>
-            <!-- Adjusted Grid Ratio for Mobile Fitting -->
             <div class="stat-grid" style="grid-template-columns: 1.6fr 1fr;">
                 <div class="stat-block">
                     <div class="stat-label">Bot Uptime</div>
@@ -339,6 +447,64 @@
                 <div class="stat-block">
                     <div class="stat-label">Premium Users</div>
                     <div class="stat-value" id="val-premium_users">{{premium_users}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing & Traffic Card -->
+        <div class="card card-full">
+            <div class="traffic-layout">
+                <!-- Redesigned Processing Block (Collapses horizontally on mobile) -->
+                <div class="processing-block">
+                    <div class="stat-label">PROCESSING</div>
+                    <div class="stat-value" id="val-active_tasks">{{active_tasks}}</div>
+                </div>
+
+                <!-- Slim Speed Sub-Card -->
+                <div class="speed-subcard">
+                    <div class="speed-header">⚡ SPEED</div>
+                    <div class="speed-grid">
+                        <div class="speed-row">
+                            <span class="speed-label"><i class="fas fa-arrow-up" style="color: var(--accent-blue);"></i> Upload</span>
+                            <span class="speed-value" id="val-up_speed">{{up_speed}}</span>
+                        </div>
+                        <div class="speed-row">
+                            <span class="speed-label"><i class="fas fa-arrow-down" style="color: var(--success);"></i> Download</span>
+                            <span class="speed-value" id="val-dl_speed">{{dl_speed}}</span>
+                        </div>
+                    </div>
+
+                    <div class="speed-header" style="margin-top: 1.25rem; color: var(--text-secondary);">⏱️ AVERAGE (1 MIN)</div>
+                    <div class="speed-grid-full">
+                        <div class="speed-row" style="border-color: rgba(139, 92, 246, 0.25);">
+                            <span class="speed-label">
+                                <i class="fas fa-arrow-up" style="color: var(--accent-purple); margin-right: 4px;"></i> 
+                                <i class="fas fa-arrow-down" style="color: var(--accent-purple);"></i>
+                            </span>
+                            <span class="speed-value" id="val-avg_speed">{{avg_speed}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fleet Node Card -->
+        <div class="card card-full">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-network-wired"></i> Fleet Architecture</span>
+            </div>
+            <div class="stat-grid grid-stack-mobile" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-block">
+                    <div class="stat-label">Total Nodes Configured</div>
+                    <div class="stat-value" id="val-total_workers">{{total_workers}}</div>
+                </div>
+                <div class="stat-block" style="border-left-color: var(--accent-blue);">
+                    <div class="stat-label">Active Workers</div>
+                    <div class="stat-value" id="val-active_workers">{{active_workers}}</div>
+                </div>
+                <div class="stat-block" style="border-left-color: var(--success);">
+                    <div class="stat-label">Free Workers</div>
+                    <div class="stat-value" id="val-free_workers">{{free_workers}}</div>
                 </div>
             </div>
         </div>
@@ -384,11 +550,11 @@
             </div>
             <div class="stat-grid grid-stack-mobile">
                 <div class="stat-block">
-                    <div class="stat-label">Bandwidth Sent</div>
+                    <div class="stat-label">Total Data Sent</div>
                     <div class="stat-value" id="val-data_sent">{{data_sent}}</div>
                 </div>
                 <div class="stat-block">
-                    <div class="stat-label">Bandwidth Recv</div>
+                    <div class="stat-label">Total Data Recv</div>
                     <div class="stat-value" id="val-data_recv">{{data_recv}}</div>
                 </div>
                 <div class="stat-block">
@@ -415,7 +581,6 @@
 
     <!-- REAL-TIME UPDATE SCRIPT -->
     <script>
-        // Remove loader when initial HTML loads
         window.addEventListener('load', () => {
             const loader = document.getElementById('loader');
             loader.style.opacity = '0';
@@ -430,19 +595,31 @@
                 
                 const data = await response.json();
                 
-                // Update Text Values
+                // Top Cards
                 document.getElementById('val-bot_status').innerText = data.bot_status;
                 document.getElementById('val-bot_uptime').innerText = data.bot_uptime;
                 document.getElementById('val-total_users').innerText = data.total_users;
                 document.getElementById('val-premium_users').innerText = data.premium_users;
-                document.getElementById('val-system_uptime').innerText = data.system_uptime;
                 
+                // Processing & Traffic
+                document.getElementById('val-active_tasks').innerText = data.active_tasks;
+                document.getElementById('val-up_speed').innerText = data.up_speed;
+                document.getElementById('val-dl_speed').innerText = data.dl_speed;
+                document.getElementById('val-avg_speed').innerText = data.avg_speed;
+
+                // Fleet
+                document.getElementById('val-total_workers').innerText = data.total_workers;
+                document.getElementById('val-active_workers').innerText = data.active_workers;
+                document.getElementById('val-free_workers').innerText = data.free_workers;
+
+                // Storage & Network
+                document.getElementById('val-system_uptime').innerText = data.system_uptime;
                 document.getElementById('val-data_sent').innerText = data.data_sent;
                 document.getElementById('val-data_recv').innerText = data.data_recv;
                 document.getElementById('val-free_disk').innerText = data.free_disk;
                 document.getElementById('val-used_disk').innerText = data.used_disk;
 
-                // Update Progress Bars & percentages
+                // Progress Bars
                 document.getElementById('val-cpu_usage').innerText = data.cpu_usage + '%';
                 document.getElementById('bar-cpu_usage').style.width = data.cpu_usage + '%';
                 
