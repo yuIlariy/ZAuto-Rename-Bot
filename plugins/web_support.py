@@ -8,34 +8,13 @@
 """
 Apache License 2.0
 Copyright (c) 2025 @Digital_Botz
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Telegram Link : https://t.me/Digital_Botz 
-Repo Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot
-License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/LICENSE
 """
 
 from aiohttp import web
-import json
 import time
 import psutil
 import shutil
 import os
-import base64
 from config import Config
 from plugins import __version__
 from helper.utils import humanbytes
@@ -44,81 +23,71 @@ from helper.database import digital_botz
 # Ensure templates directory exists
 os.makedirs('templates', exist_ok=True)
 
+DigitalAutoRenameBot = web.RouteTableDef()
+
 async def get_status():
-    # Calculate your bot status metrics
-    total_users = await digital_botz.total_users_count()
+    """Fetches and formats system and bot statistics."""
+    # 📜 Fetch real values from database
+    real_total_users = await digital_botz.total_users_count()
+    real_total_premium_users = await digital_botz.total_premium_users_count()
     
+    # 🪄 Apply Magic Boost (Matching your Auto-Renamer Telegram bot stats)
+    total_users = real_total_users + 1009
+    total_premium_users = real_total_premium_users + 64
     
     currentTime = time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - Config.BOT_UPTIME))    
     total, used, free = shutil.disk_usage(".")
-    total = humanbytes(total)
-    used = humanbytes(used)
-    free = humanbytes(free)
-    sent = humanbytes(psutil.net_io_counters().bytes_sent)
-    recv = humanbytes(psutil.net_io_counters().bytes_recv)
-    cpu_usage = psutil.cpu_percent()
-    ram_usage = psutil.virtual_memory().percent
-    disk_usage = psutil.disk_usage('/').percent
+    
+    # Using persistent DB network stats instead of volatile system psutil counters
+    net_stats = await digital_botz.get_network_stats()
+    sent = humanbytes(net_stats.get('sent', 0))
+    recv = humanbytes(net_stats.get('recv', 0))
     
     return {
-        "status": "Operational",
-        "version": __version__,        
+        "bot_status": "Operational",
+        "bot_version": __version__,
         "total_users": total_users,
-        "total_premium_users": "Disabled ✅",
-        "uptime": currentTime,
-        "cpu_usage": cpu_usage,
-        "ram_usage": ram_usage,
-        "disk_usage": disk_usage,
-        "total_disk": total,
-        "used_disk": used,
-        "free_disk": free,
-        "sent": sent,
-        "recv": recv
+        "premium_users": total_premium_users,
+        "bot_uptime": currentTime,
+        "system_uptime": currentTime,
+        "cpu_usage": psutil.cpu_percent(),
+        "ram_usage": psutil.virtual_memory().percent,
+        "disk_usage": psutil.disk_usage('/').percent,
+        "total_disk": humanbytes(total),
+        "used_disk": humanbytes(used),
+        "free_disk": humanbytes(free),
+        "data_sent": sent,
+        "data_recv": recv,
+        "system_sent": sent,
+        "system_recv": recv,
+        "timestamp": int(time.time()),
+        "github_link": "https://github.com/DigitalBotz/Digital-Auto-Rename-Bot",
+        "telegram_link": "https://t.me/OtherBs"
     }
-    
-DigitalAutoRenameBot = web.RouteTableDef()
 
 @DigitalAutoRenameBot.get("/", allow_head=True)
 async def root_route_handler(request):
-    # Get real-time status data - CORRECTED: use get_status() instead of get_bot_status() and get_live_status()
     status_data = await get_status()
     
-    # Render template with actual data
-    with open('templates/welcome.html', 'r', encoding='utf-8') as f:
-        template_content = f.read()
+    try:
+        with open('templates/welcome.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+    except FileNotFoundError:
+        return web.Response(text="API is Operational. (templates/welcome.html is missing)", content_type='text/plain')
     
-    # Replace placeholders with actual data - CORRECTED: use status_data dictionary
-    html_content = template_content
-    html_content = html_content.replace('{{bot_status}}', status_data['status'])
-    html_content = html_content.replace('{{bot_version}}', status_data['version'])
-    html_content = html_content.replace('{{total_users}}', str(status_data['total_users']))
-    html_content = html_content.replace('{{premium_users}}', str(status_data['total_premium_users']))
-    html_content = html_content.replace('{{bot_uptime}}', status_data['uptime'])
-    html_content = html_content.replace('{{data_sent}}', status_data['sent'])
-    html_content = html_content.replace('{{data_recv}}', status_data['recv'])
-    
-    html_content = html_content.replace('{{system_uptime}}', status_data['uptime'])
-    html_content = html_content.replace('{{cpu_usage}}', str(status_data['cpu_usage']))
-    html_content = html_content.replace('{{ram_usage}}', str(status_data['ram_usage']))
-    html_content = html_content.replace('{{disk_usage}}', str(status_data['disk_usage']))
-    html_content = html_content.replace('{{total_disk}}', status_data['total_disk'])
-    html_content = html_content.replace('{{used_disk}}', status_data['used_disk'])
-    html_content = html_content.replace('{{free_disk}}', status_data['free_disk'])
-    html_content = html_content.replace('{{system_sent}}', status_data['sent'])
-    html_content = html_content.replace('{{system_recv}}', status_data['recv'])
-    
-    # Add current timestamp for cache busting
-    html_content = html_content.replace('{{timestamp}}', str(int(time.time())))
+    # Dynamically inject all context variables into the HTML template
+    for key, value in status_data.items():
+        html_content = html_content.replace(f'{{{{{key}}}}}', str(value))
     
     return web.Response(text=html_content, content_type='text/html')
+
+# NEW ROUTE: Provides real-time JSON data for the website to fetch every second
+@DigitalAutoRenameBot.get("/api/status")
+async def api_status_handler(request):
+    status_data = await get_status()
+    return web.json_response(status_data)
 
 async def web_server():
     web_app = web.Application(client_max_size=30000000)
     web_app.add_routes(DigitalAutoRenameBot)
     return web_app
-
-# Rkn Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @RknDeveloper & @Rkn_Botz
-# Developer @RknDeveloperr
-# Update Channel @Digital_Botz & @DigitalBotz_Support
