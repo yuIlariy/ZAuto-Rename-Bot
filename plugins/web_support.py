@@ -64,7 +64,21 @@ async def get_status():
     total_users = real_total_users + 1009
     total_premium_users = real_total_premium_users + 64
     
-    currentTime = time.strftime("%Hh%Mm%Ss", time.gmtime(time.time() - Config.BOT_UPTIME))    
+    # --- UPTIME CALCULATIONS ---
+    # Bot Uptime
+    bot_sec = time.time() - Config.BOT_UPTIME
+    b_days, b_rem = divmod(bot_sec, 86400)
+    b_hrs, b_rem = divmod(b_rem, 3600)
+    b_mins, b_secs = divmod(b_rem, 60)
+    bot_uptime = f"{int(b_days)}d {int(b_hrs)}h {int(b_mins)}m" if b_days > 0 else f"{int(b_hrs):02d}h{int(b_mins):02d}m{int(b_secs):02d}s"
+
+    # VPS System Uptime
+    sys_sec = time.time() - psutil.boot_time()
+    s_days, s_rem = divmod(sys_sec, 86400)
+    s_hrs, s_rem = divmod(s_rem, 3600)
+    s_mins, s_secs = divmod(s_rem, 60)
+    system_uptime = f"{int(s_days)}d {int(s_hrs)}h {int(s_mins)}m" if s_days > 0 else f"{int(s_hrs):02d}h{int(s_mins):02d}m{int(s_secs):02d}s"
+
     total, used, free = shutil.disk_usage(".")
     
     current_net_io = psutil.net_io_counters()
@@ -112,8 +126,8 @@ async def get_status():
         "bot_version": __version__,
         "total_users": total_users,
         "premium_users": total_premium_users,
-        "bot_uptime": currentTime,
-        "system_uptime": currentTime,
+        "bot_uptime": bot_uptime,
+        "system_uptime": system_uptime,
         "cpu_usage": psutil.cpu_percent(),
         "ram_usage": psutil.virtual_memory().percent,
         "disk_usage": psutil.disk_usage('/').percent,
