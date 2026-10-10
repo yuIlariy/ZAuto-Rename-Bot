@@ -15,6 +15,7 @@ import time
 import psutil
 import shutil
 import os
+from collections import deque
 from config import Config
 from plugins import __version__
 from helper.utils import humanbytes
@@ -31,24 +32,29 @@ last_time = time.time()
 last_up_speed = 0
 last_dl_speed = 0
 
-# Static 1-Minute Tracker Globals
-last_minute_time = time.time()
-last_minute_sent = last_net_io.bytes_sent
-last_minute_recv = last_net_io.bytes_recv
-avg_up_speed = 0
-avg_dl_speed = 0
+# --- 24-HOUR ROLLING RENAME TRACKER ---
+recent_renames = deque()
+
+# ⚠️ INVISIBLE HOOK: Intercept successful uploads without modifying file_rename.py
+original_update_limit = digital_botz.update_daily_limit
+
+async def hooked_update_limit(user_id, size):
+    recent_renames.append(time.time()) # Log the timestamp of the successful rename
+    return await original_update_limit(user_id, size) # Pass it back to the database normally
+
+# Override the database method in memory
+digital_botz.update_daily_limit = hooked_update_limit
 
 async def get_status():
     """Fetches and formats system and bot statistics."""
-    global last_net_io, last_time, last_up_speed, last_dl_speed
-    global last_minute_time, last_minute_sent, last_minute_recv, avg_up_speed, avg_dl_speed
+    global last_net_io, last_time, last_up_speed, last_dl_speed, recent_renames
     
-    # ⚠️ FIXED CIRCULAR IMPORT: Import these inside the function, not at the top of the file!
+    # Safely import directly from the advanced QueueManager in the Auto Renamer
     try:
-        from plugins.file_rename import active_tasks, worker_loads
+        from plugins.file_rename import worker_loads, manager
     except ImportError:
-        active_tasks = {}
         worker_loads = {}
+        manager = None
     
     # 📜 Fetch real values from database
     real_total_users = await digital_botz.total_users_count()
@@ -72,17 +78,12 @@ async def get_status():
         last_net_io = current_net_io
         last_time = current_time
 
-    # --- 1-MINUTE AVERAGE SPEEDS (Updates exactly once every 60 seconds) ---
-    minute_delta = current_time - last_minute_time
-    if minute_delta >= 60.0:
-        avg_up_speed = (current_net_io.bytes_sent - last_minute_sent) / minute_delta
-        avg_dl_speed = (current_net_io.bytes_recv - last_minute_recv) / minute_delta
-        last_minute_time = current_time
-        last_minute_sent = current_net_io.bytes_sent
-        last_minute_recv = current_net_io.bytes_recv
-
-    # Combine Up and Down for the Average
-    avg_total_speed = avg_up_speed + avg_dl_speed
+    # --- 24-HOUR ROLLING WINDOW CALCULATION ---
+    # Continuously clean up timestamps older than exactly 86,400 seconds (24 hours)
+    while recent_renames and current_time - recent_renames[0] > 86400:
+        recent_renames.popleft()
+    
+    renames_24h = len(recent_renames)
 
     # Restore Lifetime Database Bandwidth
     net_stats = await digital_botz.get_network_stats()
@@ -93,12 +94,18 @@ async def get_status():
     total_workers = len(getattr(Config, "WORKER_CLIENTS", []))
     active_workers = sum(1 for load in worker_loads.values() if load > 0)
     free_workers = max(0, total_workers - active_workers)
-    current_active_tasks = len(active_tasks)
     
-    # Safely format speed strings (handles 0 bytes properly)
+    # Safely extract processing count from the Advanced QueueManager
+    current_active_tasks = 0
+    if manager:
+        for dl_list in getattr(manager, 'active_downloads', {}).values():
+            current_active_tasks += len(dl_list)
+        for ul_list in getattr(manager, 'staging_pool', {}).values():
+            current_active_tasks += len(ul_list)
+    
+    # Safely format speed strings
     up_speed_str = f"{humanbytes(last_up_speed)}/s" if last_up_speed > 0 else "0 B/s"
     dl_speed_str = f"{humanbytes(last_dl_speed)}/s" if last_dl_speed > 0 else "0 B/s"
-    avg_speed_str = f"{humanbytes(avg_total_speed)}/s" if avg_total_speed > 0 else "0 B/s"
     
     return {
         "bot_status": "Operational",
@@ -117,7 +124,7 @@ async def get_status():
         "data_recv": data_recv,
         "up_speed": up_speed_str,
         "dl_speed": dl_speed_str,
-        "avg_speed": avg_speed_str,
+        "renames_24h": renames_24h,
         "total_workers": total_workers,
         "active_workers": active_workers,
         "free_workers": free_workers,
