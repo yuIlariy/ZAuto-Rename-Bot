@@ -20,13 +20,6 @@ from plugins import __version__
 from helper.utils import humanbytes
 from helper.database import digital_botz
 
-# Safely import tracking dictionaries for fleet and active processing
-try:
-    from plugins.file_rename import active_tasks, worker_loads
-except ImportError:
-    active_tasks = {}
-    worker_loads = {}
-
 # Ensure templates directory exists
 os.makedirs('templates', exist_ok=True)
 
@@ -49,6 +42,13 @@ async def get_status():
     """Fetches and formats system and bot statistics."""
     global last_net_io, last_time, last_up_speed, last_dl_speed
     global last_minute_time, last_minute_sent, last_minute_recv, avg_up_speed, avg_dl_speed
+    
+    # ⚠️ FIXED CIRCULAR IMPORT: Import these inside the function, not at the top of the file!
+    try:
+        from plugins.file_rename import active_tasks, worker_loads
+    except ImportError:
+        active_tasks = {}
+        worker_loads = {}
     
     # 📜 Fetch real values from database
     real_total_users = await digital_botz.total_users_count()
