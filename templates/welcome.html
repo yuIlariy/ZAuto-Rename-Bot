@@ -454,7 +454,7 @@
         <!-- Processing & Traffic Card -->
         <div class="card card-full">
             <div class="traffic-layout">
-                <!-- Redesigned Processing Block (Collapses horizontally on mobile) -->
+                <!-- Processing Block -->
                 <div class="processing-block">
                     <div class="stat-label">PROCESSING</div>
                     <div class="stat-value" id="val-active_tasks">{{active_tasks}}</div>
@@ -474,14 +474,14 @@
                         </div>
                     </div>
 
-                    <div class="speed-header" style="margin-top: 1.25rem; color: var(--text-secondary);">⏱️ AVERAGE (1 MIN)</div>
+                    <div class="speed-header" style="margin-top: 1.25rem; color: var(--text-secondary);">⏱️ TOTAL RENAMES (24H)</div>
                     <div class="speed-grid-full">
                         <div class="speed-row" style="border-color: rgba(139, 92, 246, 0.25);">
                             <span class="speed-label">
-                                <i class="fas fa-arrow-up" style="color: var(--accent-purple); margin-right: 4px;"></i> 
-                                <i class="fas fa-arrow-down" style="color: var(--accent-purple);"></i>
+                                <i class="fas fa-check-circle" style="color: var(--accent-purple); margin-right: 4px;"></i> 
+                                Files Successfully Renamed
                             </span>
-                            <span class="speed-value" id="val-avg_speed">{{avg_speed}}</span>
+                            <span class="speed-value" id="val-renames_24h">{{renames_24h}}</span>
                         </div>
                     </div>
                 </div>
@@ -605,7 +605,7 @@
                 document.getElementById('val-active_tasks').innerText = data.active_tasks;
                 document.getElementById('val-up_speed').innerText = data.up_speed;
                 document.getElementById('val-dl_speed').innerText = data.dl_speed;
-                document.getElementById('val-avg_speed').innerText = data.avg_speed;
+                document.getElementById('val-renames_24h').innerText = data.renames_24h; // Updated binding
 
                 // Fleet
                 document.getElementById('val-total_workers').innerText = data.total_workers;
