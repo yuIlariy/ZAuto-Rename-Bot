@@ -60,21 +60,36 @@ def get_sort_key(item):
         return (float('inf'), float('inf'), item.get('msg').id if item.get('msg') else float('inf'))
 
 # ==========================================
-# --- LEAST BUSY WORKER LOAD BALANCER ---
+# --- DYNAMIC ROTATIONAL LOAD BALANCER ---
 # ==========================================
 worker_loads = {}
+last_worker_index = -1  # Remembers who took the last job
 
 def get_least_busy_worker(main_client):
+    global last_worker_index
     workers = getattr(Config, "WORKER_CLIENTS", [])
     if not workers:
         return main_client
     
+    # Ensure all workers are in the tracking dictionary
     for w in workers:
         if w not in worker_loads:
             worker_loads[w] = 0
             
-    least_busy = min(workers, key=lambda w: worker_loads.get(w, 0))
-    return least_busy
+    # Find the absolute minimum load right now (e.g., 0 or 1)
+    min_load = min(worker_loads[w] for w in workers)
+    
+    # Check the fleet in a circle, starting from the guy AFTER the last one used
+    for i in range(len(workers)):
+        check_index = (last_worker_index + 1 + i) % len(workers)
+        worker = workers[check_index]
+        
+        # Give the job to the next worker in line who matches the minimum load
+        if worker_loads[worker] == min_load:
+            last_worker_index = check_index
+            return worker
+            
+    return main_client
 
 # ==========================================
 # --- QUEUE MANAGER CLASS (BARRIER UPGRADE) ---
@@ -296,17 +311,13 @@ async def rename_start(client, message):
             'start_time': time.time(),
             'total_files': len(manager.user_tasks.get(user_id, []))
         }
-        
-        assigned_worker = get_least_busy_worker(client)
-        if assigned_worker != client:
-            worker_loads[assigned_worker] = worker_loads.get(assigned_worker, 0) + 1
 
-        dl_task = asyncio.create_task(download_worker(client, assigned_worker, user_id))
-        ul_task = asyncio.create_task(upload_worker(client, assigned_worker, user_id))
+        dl_task = asyncio.create_task(download_worker(client, user_id))
+        ul_task = asyncio.create_task(upload_worker(client, user_id))
         manager.register_workers(user_id, dl_task, ul_task)
 
 
-async def download_worker(main_client, worker_client, user_id):
+async def download_worker(main_client, user_id):
     try:
         while True:
             lock = await manager.get_lock(user_id)
@@ -322,6 +333,11 @@ async def download_worker(main_client, worker_client, user_id):
             
             message = item['msg']
             task_id = item['task_id']
+            
+            # --- DYNAMIC ROTATION ALLOCATION (DOWNLOAD) ---
+            worker_client = get_least_busy_worker(main_client)
+            if worker_client != main_client:
+                worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
             
             try:
                 state = manager.batch_state.get(user_id)
@@ -481,6 +497,10 @@ async def download_worker(main_client, worker_client, user_id):
                         pass
             
             finally:
+                # --- DYNAMIC ROTATION RELEASE (DOWNLOAD) ---
+                if worker_client != main_client:
+                    worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
+                
                 async with lock:
                     if user_id in manager.active_downloads and sort_key in manager.active_downloads[user_id]:
                         manager.active_downloads[user_id].remove(sort_key)
@@ -501,7 +521,7 @@ async def download_worker(main_client, worker_client, user_id):
         if user_id in manager.upload_events:
             manager.upload_events[user_id].set()
 
-async def upload_worker(main_client, worker_client, user_id):
+async def upload_worker(main_client, user_id):
     try:
         while True:
             await manager.upload_events[user_id].wait()
@@ -550,10 +570,15 @@ async def upload_worker(main_client, worker_client, user_id):
                     
                 rkn_processing = data.get('rkn_processing')
                 
+                # --- DYNAMIC ROTATION ALLOCATION (UPLOAD) ---
+                worker_client = get_least_busy_worker(main_client)
+                uploader = app if (getattr(Config, 'STRING_SESSION', None) and data['file_size'] > 2000 * 1024 * 1024) else worker_client
+                is_main_bot = (uploader == main_client)
+                
+                if uploader != main_client and uploader != app:
+                    worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
+                
                 try:
-                    uploader = app if (getattr(Config, 'STRING_SESSION', None) and data['file_size'] > 2000 * 1024 * 1024) else worker_client
-                    is_main_bot = (uploader == main_client)
-                    
                     upload_attempts = 0
                     while upload_attempts < 3:
                         try:
@@ -624,7 +649,8 @@ async def upload_worker(main_client, worker_client, user_id):
                                 wait_time = int(str(error).split(":")[1])
                                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
-                                    worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
+                                    # Swap worker dynamically on floodwait
+                                    worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     worker_client = get_least_busy_worker(main_client)
                                     worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
                                     uploader = worker_client
@@ -693,6 +719,10 @@ async def upload_worker(main_client, worker_client, user_id):
                         except Exception: 
                             pass
                 finally:
+                    # --- DYNAMIC ROTATION RELEASE (UPLOAD) ---
+                    if uploader != main_client and uploader != app:
+                        worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
+
                     await remove_path(data['ph_path'], data['file_path'])
                     try: 
                         shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
@@ -713,8 +743,6 @@ async def upload_worker(main_client, worker_client, user_id):
                 pass
             
         manager.cleanup(user_id)
-        if worker_client != main_client:
-            worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
