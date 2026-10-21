@@ -409,25 +409,17 @@ async def download_worker(main_client, user_id):
                             ), timeout=7200)
                         break 
                         
-                    except asyncio.TimeoutError:
-                        attempts += 1
-                        if log_msg:
-                            try: 
-                                await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
-                            except Exception: 
-                                pass
-                        await asyncio.sleep(5)
+                    except MessageIdInvalid:
+                        raise Exception("Task Cancelled")
                         
-                    except (FloodWait, RuntimeError) as e:
+                    except Exception as e:
+                        # 🛡️ UNIVERSAL ERROR TRICK SHOT (Handles Timeout, FloodWait, -503 Server Error, Runtime Dead Sockets)
                         attempts += 1
                         if log_msg:
-                            try: 
-                                await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
-                            except Exception: 
-                                pass
+                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg.id)
+                            except Exception: pass
                             
-                        # If RuntimeError (dead socket), sleep 5s. If FloodWait, sleep fw.value.
-                        wait_time = e.value if isinstance(e, FloodWait) else 5
+                        wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
 
                         workers_list = getattr(Config, "WORKER_CLIENTS", [])
                         if len(workers_list) > 1 and worker_client != main_client:
@@ -437,14 +429,9 @@ async def download_worker(main_client, user_id):
                             await asyncio.sleep(2)
                         else:
                             await asyncio.sleep(wait_time)
-                            
-                    except MessageIdInvalid:
-                        raise Exception("Task Cancelled")
-                    except Exception as e: 
-                        raise e 
                 
                 if not dl_path:
-                    raise Exception("Failed to download file after retries (Network Freeze).")
+                    raise Exception("Failed to download file after retries (Network Freeze or Server Timeout).")
 
                 duration = 0
                 try:
@@ -658,11 +645,16 @@ async def upload_worker(main_client, user_id):
                                         pass
                                 error = await perform_upload()
 
-                            if error and str(error).startswith("FLOODWAIT:"):
-                                wait_time = int(str(error).split(":")[1])
+                            if error:
+                                # 🛡️ UNIVERSAL ERROR TRICK SHOT (Instantly drop failing worker on any upload error)
+                                wait_time = 5
+                                if str(error).startswith("FLOODWAIT:"):
+                                    try: wait_time = int(str(error).split(":")[1])
+                                    except: pass
+
                                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
-                                    # 🛡️ TRICK SHOT: Swap worker dynamically on floodwait AND dead socket (RuntimeError)
+                                    # Swap worker dynamically on any error (FloodWait, Server Error, Dead Socket)
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     worker_client = get_least_busy_worker(main_client)
                                     worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
@@ -672,23 +664,21 @@ async def upload_worker(main_client, user_id):
                                     await asyncio.sleep(2)
                                     continue
                                 else:
+                                    if upload_attempts >= 2:
+                                        await digital_botz.delete_task(data['task_id'])
+                                        state = manager.batch_state.get(user_id)
+                                        if state:
+                                            state['processed'] += 1
+                                            await manager.update_status_msg(user_id)
+                                            
+                                        if "MESSAGE_ID_INVALID" not in str(error):
+                                            try: await main_client.send_message(user_id, f"**Eʀʀᴏʀ:** {error}", reply_to_message_id=data['message'].id)
+                                            except Exception: pass
+                                        break
                                     await asyncio.sleep(wait_time)
                                     upload_attempts += 1
                                     continue
                                     
-                            elif error:
-                                await digital_botz.delete_task(data['task_id'])
-                                state = manager.batch_state.get(user_id)
-                                if state:
-                                    state['processed'] += 1
-                                    await manager.update_status_msg(user_id)
-                                    
-                                if "MESSAGE_ID_INVALID" not in str(error):
-                                    try: 
-                                        await main_client.send_message(user_id, f"**Eʀʀᴏʀ:** {error}", reply_to_message_id=data['message'].id)
-                                    except Exception: 
-                                        pass
-                                break
                             else:
                                 await digital_botz.update_daily_limit(user_id, data['file_size'])
                                 await digital_botz.delete_task(data['task_id'])
@@ -770,10 +760,6 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
         return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
-    except RuntimeError as re:
-        if "handler is closed" in str(re).lower():
-            # 🛡️ TRICK SHOT: Tell the upload loop to treat the dead socket exactly like a FloodWait so it swaps workers instantly
-            return None, "FLOODWAIT:5" 
-        return None, str(re)
     except Exception as e:
+        # Treats RuntimeError, 503 Internal Server Error, etc. uniformly so they trigger the worker swap
         return None, str(e)
