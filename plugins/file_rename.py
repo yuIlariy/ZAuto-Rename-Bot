@@ -389,6 +389,11 @@ async def download_worker(main_client, user_id):
                 attempts = 0
                 while attempts < 3:
                     try:
+                        # 🛡️ SELF-HEALING: Reconnect dead workers before downloading
+                        if not worker_client.is_connected:
+                            try: await worker_client.connect()
+                            except Exception: pass
+
                         if worker_client != main_client:
                             log_msg = await message.copy(Config.LOG_CHANNEL)
                             target_msg = await worker_client.get_messages(Config.LOG_CHANNEL, log_msg.id)
@@ -413,7 +418,7 @@ async def download_worker(main_client, user_id):
                                 pass
                         await asyncio.sleep(5)
                         
-                    except FloodWait as fw:
+                    except (FloodWait, RuntimeError) as e:
                         attempts += 1
                         if log_msg:
                             try: 
@@ -421,6 +426,9 @@ async def download_worker(main_client, user_id):
                             except Exception: 
                                 pass
                             
+                        # If RuntimeError (dead socket), sleep 5s. If FloodWait, sleep fw.value.
+                        wait_time = e.value if isinstance(e, FloodWait) else 5
+
                         workers_list = getattr(Config, "WORKER_CLIENTS", [])
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
@@ -428,7 +436,7 @@ async def download_worker(main_client, user_id):
                             worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
                             await asyncio.sleep(2)
                         else:
-                            await asyncio.sleep(fw.value)
+                            await asyncio.sleep(wait_time)
                             
                     except MessageIdInvalid:
                         raise Exception("Task Cancelled")
@@ -583,6 +591,11 @@ async def upload_worker(main_client, user_id):
                     while upload_attempts < 3:
                         try:
                             async def perform_upload():
+                                # 🛡️ SELF-HEALING: Reconnect dead uploaders before starting
+                                if not uploader.is_connected:
+                                    try: await uploader.connect()
+                                    except Exception: pass
+
                                 if not is_main_bot:
                                     filw, error = await upload_files(
                                         uploader, Config.LOG_CHANNEL, data['upload_type'], data['file_path'], 
@@ -649,7 +662,7 @@ async def upload_worker(main_client, user_id):
                                 wait_time = int(str(error).split(":")[1])
                                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
-                                    # Swap worker dynamically on floodwait
+                                    # 🛡️ TRICK SHOT: Swap worker dynamically on floodwait AND dead socket (RuntimeError)
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     worker_client = get_least_busy_worker(main_client)
                                     worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
@@ -757,5 +770,10 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
         return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
+    except RuntimeError as re:
+        if "handler is closed" in str(re).lower():
+            # 🛡️ TRICK SHOT: Tell the upload loop to treat the dead socket exactly like a FloodWait so it swaps workers instantly
+            return None, "FLOODWAIT:5" 
+        return None, str(re)
     except Exception as e:
         return None, str(e)
