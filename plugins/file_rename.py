@@ -88,6 +88,19 @@ def get_least_busy_worker(main_client):
     return main_client
 
 # ==========================================
+# --- SAFE DELETE TRACKER ---
+# ==========================================
+async def safe_delete_task(task_id, user_id, client):
+    """Unconditionally hunts down and deletes the processing message from chat before wiping DB record."""
+    try:
+        raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
+        if raw_task and raw_task.get("processing_msg_id", 0) != 0:
+            await client.delete_messages(user_id, raw_task["processing_msg_id"])
+    except Exception:
+        pass
+    await digital_botz.delete_task(task_id)
+
+# ==========================================
 # --- QUEUE MANAGER CLASS (BARRIER UPGRADE) ---
 # ==========================================
 class QueueManager:
@@ -100,7 +113,7 @@ class QueueManager:
         self.locks = {}
         self.worker_locks = {}
         self.batch_state = {} 
-        self.silent_users = set()  # Tracks users forced into stealth mode for this batch
+        self.silent_users = set()  
 
     async def get_lock(self, user_id):
         if user_id not in self.locks:
@@ -132,10 +145,14 @@ class QueueManager:
                 self.upload_events[user_id].set()
 
     async def update_status_msg(self, user_id):
+        state = self.batch_state.get(user_id)
         if user_id in self.silent_users:
+            if state and state.get('status_msg'):
+                try: await state['status_msg'].delete()
+                except: pass
+                state['status_msg'] = None
             return  
             
-        state = self.batch_state.get(user_id)
         if not state or not state.get('status_msg'): 
             return
         
@@ -195,20 +212,15 @@ async def resume_all_tasks(client):
     except Exception: 
         pass
 
-    # 🛡️ FIX 2: Bulletproof Log Channel Ghost Cleanup
     try:
-        log_msgs = []
-        async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=100):
-            if getattr(old_log, "media", None):
-                log_msgs.append(old_log.id)
-        if log_msgs:
-            for i in range(0, len(log_msgs), 100):
-                try: 
-                    await client.delete_messages(Config.LOG_CHANNEL, log_msgs[i:i+100])
-                except Exception: 
-                    pass
-    except Exception as e: 
-        print(f"Log Channel Cleanup Failed: {e}")
+        async for batch in digital_botz.db["active_batches"].find():
+            try: 
+                await client.delete_messages(batch["_id"], batch["status_msg_id"])
+            except Exception: 
+                pass
+        await digital_botz.db["active_batches"].delete_many({})
+    except Exception as e:
+        print(f"Batch Status DB Cleanup Error: {e}")
 
     try:
         tasks = await Task.find_all().to_list()
@@ -224,27 +236,18 @@ async def resume_all_tasks(client):
 
         count = 0
         for user_id, user_task_list in user_tasks_map.items():
-            try:
-                pm_msgs = []
-                async for old_msg in client.get_chat_history(user_id, limit=50):
-                    text = old_msg.text or ""
-                    if "Bᴀᴛᴄʜ Sᴛᴀᴛᴜꜱ" in text or "Pʀᴇᴘᴀʀɪɴɢ" in text or "Wᴀɪᴛɪɴɢ" in text or "Uᴩʟᴏᴀᴅɪɴɢ" in text or "Dᴏᴡɴʟᴏᴀᴅɪɴɢ" in text:
-                        pm_msgs.append(old_msg.id)
-                if pm_msgs:
-                    for i in range(0, len(pm_msgs), 100):
-                        try: await client.delete_messages(user_id, pm_msgs[i:i+100])
-                        except: pass
-            except Exception:
-                pass
-
             valid_msgs = []
             for task in user_task_list:
                 try:
-                    if getattr(task, "processing_msg_id", 0) != 0:
-                        try: 
-                            await client.delete_messages(user_id, task.processing_msg_id)
-                        except Exception: 
-                            pass
+                    raw_task = await digital_botz.db["tasks"].find_one({"_id": task.id}) or {}
+
+                    if raw_task.get("processing_msg_id", 0) != 0:
+                        try: await client.delete_messages(user_id, raw_task["processing_msg_id"])
+                        except Exception: pass
+                    
+                    if raw_task.get("log_msg_id", 0) != 0:
+                        try: await client.delete_messages(Config.LOG_CHANNEL, raw_task["log_msg_id"])
+                        except Exception: pass
                     
                     msg_id = getattr(task, "file_msg_id", getattr(task, "message_id", None))
                     msg = None
@@ -255,7 +258,6 @@ async def resume_all_tasks(client):
                     try: await task.delete()
                     except Exception: pass
 
-                    # 🛡️ FIX 1: Safely evaluate Pyrogram messages to ensure valid messages are added
                     if msg and not getattr(msg, "empty", False):
                         valid_msgs.append(msg)
 
@@ -277,7 +279,6 @@ async def resume_all_tasks(client):
 
                 for msg in valid_msgs:
                     try:
-                        # Fallback injection to ensure message has from_user property if stripped by get_messages
                         if not getattr(msg, "from_user", None):
                             class DummyUser:
                                 def __init__(self, uid):
@@ -364,6 +365,7 @@ async def download_worker(main_client, user_id):
                 if state and not state.get('status_msg') and user_id not in manager.silent_users:
                     try: 
                         state['status_msg'] = await main_client.send_message(user_id, "📊 **Iɴɪᴛɪᴀʟɪᴢɪɴɢ Bᴀᴛᴄʜ...**")
+                        await digital_botz.db["active_batches"].update_one({"_id": user_id}, {"$set": {"status_msg_id": state['status_msg'].id}}, upsert=True)
                     except Exception: 
                         manager.silent_users.add(user_id)
                     
@@ -425,6 +427,7 @@ async def download_worker(main_client, user_id):
 
                         if worker_client != main_client:
                             log_msg_down = await message.copy(Config.LOG_CHANNEL)
+                            await digital_botz.db["tasks"].update_one({"_id": task_id}, {"$set": {"log_msg_id": log_msg_down.id}})
                             target_msg = await worker_client.get_messages(Config.LOG_CHANNEL, log_msg_down.id)
                         else:
                             target_msg = message
@@ -470,7 +473,7 @@ async def download_worker(main_client, user_id):
                             
                         if main_client.premium and main_client.uploadlimit:
                             await digital_botz.increment_used_limit(user_id, -media.file_size)
-                        await digital_botz.delete_task(task_id)
+                        await safe_delete_task(task_id, user_id, main_client)
                         raise Exception("MessageIdInvalid")
                         
                     except Exception as e:
@@ -498,12 +501,6 @@ async def download_worker(main_client, user_id):
                             await asyncio.sleep(wait_time)
                         continue
 
-                if not dl_path:
-                    if main_client.premium and main_client.uploadlimit:
-                        await digital_botz.increment_used_limit(user_id, -media.file_size)
-                    await digital_botz.delete_task(task_id)
-                    continue
-                    
                 duration = 0
                 try:
                     parser = createParser(file_path)
@@ -545,7 +542,7 @@ async def download_worker(main_client, user_id):
                         
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
-                await digital_botz.delete_task(task_id)
+                await safe_delete_task(task_id, user_id, main_client)
                 try: 
                     shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
                 except Exception: 
@@ -616,7 +613,10 @@ async def upload_worker(main_client, user_id):
                 if not data:
                     if candidate.get('rkn_processing') and user_id not in manager.silent_users:
                         try: await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
-                        except Exception: manager.silent_users.add(user_id)
+                        except Exception: 
+                            manager.silent_users.add(user_id)
+                            try: await candidate['rkn_processing'].delete()
+                            except: pass
                     break 
                     
                 rkn_processing = data.get('rkn_processing')
@@ -659,6 +659,9 @@ async def upload_worker(main_client, user_id):
                                                 delivered = True
                                             except FloodWait as fw:
                                                 manager.silent_users.add(user_id)
+                                                if rkn_processing:
+                                                    try: await rkn_processing.delete()
+                                                    except: pass
                                                 await asyncio.sleep(fw.value)
                                             except Exception:
                                                 try:
@@ -689,17 +692,27 @@ async def upload_worker(main_client, user_id):
                                 async with upload_lock:
                                     if rkn_processing and user_id not in manager.silent_users:
                                         try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                        except Exception: manager.silent_users.add(user_id)
+                                        except Exception: 
+                                            manager.silent_users.add(user_id)
+                                            try: await rkn_processing.delete()
+                                            except: pass
                                     error = await perform_upload()
                             else:
                                 if rkn_processing and user_id not in manager.silent_users:
                                     try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                    except Exception: manager.silent_users.add(user_id)
+                                    except Exception: 
+                                        manager.silent_users.add(user_id)
+                                        try: await rkn_processing.delete()
+                                        except: pass
                                 error = await perform_upload()
 
                             if error:
                                 if str(error).startswith("FLOODWAIT:"):
                                     manager.silent_users.add(user_id)
+                                    if rkn_processing:
+                                        try: await rkn_processing.delete()
+                                        except: pass
+                                        rkn_processing = None
                                     try: wait_time = int(str(error).split(":")[1])
                                     except: wait_time = 5
                                 else:
@@ -718,7 +731,7 @@ async def upload_worker(main_client, user_id):
                                     
                             else:
                                 await digital_botz.update_daily_limit(user_id, data['file_size'])
-                                await digital_botz.delete_task(data['task_id'])
+                                await safe_delete_task(data['task_id'], user_id, main_client)
                                 
                                 state = manager.batch_state.get(user_id)
                                 if state:
@@ -730,9 +743,10 @@ async def upload_worker(main_client, user_id):
                                     try: 
                                         await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
                                         await asyncio.sleep(2)
-                                        await rkn_processing.delete()
                                     except Exception: 
                                         pass
+                                    try: await rkn_processing.delete()
+                                    except: pass
                                 break
 
                         except asyncio.TimeoutError:
@@ -750,18 +764,22 @@ async def upload_worker(main_client, user_id):
                         except MessageIdInvalid:
                             if main_client.premium and main_client.uploadlimit:
                                 await digital_botz.increment_used_limit(user_id, -data['file_size'])
-                            await digital_botz.delete_task(data['task_id'])
+                            await safe_delete_task(data['task_id'], user_id, main_client)
                             raise Exception("MessageIdInvalid")
                             
                         except Exception as perform_e:
                             if isinstance(perform_e, FloodWait):
                                 manager.silent_users.add(user_id)
+                                if rkn_processing:
+                                    try: await rkn_processing.delete()
+                                    except: pass
+                                    rkn_processing = None
                             print(f"Upload loop crash: {perform_e}")
                             break
 
                 except Exception as inner_e:
                     print(f"Upload Inner Error: {inner_e}")
-                    await digital_botz.delete_task(data['task_id'])
+                    await safe_delete_task(data['task_id'], user_id, main_client)
                     
                     state = manager.batch_state.get(user_id)
                     if state:
@@ -796,6 +814,9 @@ async def upload_worker(main_client, user_id):
                     await state['status_msg'].delete()
                 except Exception:
                     pass
+                    
+        try: await digital_botz.db["active_batches"].delete_one({"_id": user_id})
+        except: pass
             
         manager.cleanup(user_id)
 
