@@ -71,20 +71,16 @@ def get_least_busy_worker(main_client):
     if not workers:
         return main_client
     
-    # Ensure all workers are in the tracking dictionary
     for w in workers:
         if w not in worker_loads:
             worker_loads[w] = 0
             
-    # Find the absolute minimum load right now (e.g., 0 or 1)
     min_load = min(worker_loads[w] for w in workers)
     
-    # Check the fleet in a circle, starting from the guy AFTER the last one used
     for i in range(len(workers)):
         check_index = (last_worker_index + 1 + i) % len(workers)
         worker = workers[check_index]
         
-        # Give the job to the next worker in line who matches the minimum load
         if worker_loads[worker] == min_load:
             last_worker_index = check_index
             return worker
@@ -104,6 +100,7 @@ class QueueManager:
         self.locks = {}
         self.worker_locks = {}
         self.batch_state = {} 
+        self.silent_users = set()  # 🛡️ Tracks users forced into permanent queue-wide silence
 
     async def get_lock(self, user_id):
         if user_id not in self.locks:
@@ -135,6 +132,9 @@ class QueueManager:
                 self.upload_events[user_id].set()
 
     async def update_status_msg(self, user_id):
+        if user_id in self.silent_users:
+            return  # 🛡️ Stay completely silent if user is flagged
+            
         state = self.batch_state.get(user_id)
         if not state or not state.get('status_msg'): 
             return
@@ -155,8 +155,6 @@ class QueueManager:
         )
         try:
             await state['status_msg'].edit(text)
-        except FloodWait: 
-            pass
         except Exception: 
             pass
 
@@ -171,6 +169,9 @@ class QueueManager:
         self.active_downloads[user_id] = []
         self.staging_pool[user_id] = []
         self.upload_events[user_id] = asyncio.Event()
+        # Reset silence flag for a fresh batch attempt
+        if user_id in self.silent_users:
+            self.silent_users.remove(user_id)
 
     def register_workers(self, user_id, dl_task, ul_task):
         self.workers[user_id] = {'dl': dl_task, 'ul': ul_task}
@@ -178,6 +179,7 @@ class QueueManager:
     def cleanup(self, user_id):
         for d in [self.workers, self.user_tasks, self.batch_state, self.active_downloads, self.staging_pool, self.upload_events]:
             d.pop(user_id, None)
+        self.silent_users.discard(user_id)
 
 manager = QueueManager()
 
@@ -194,7 +196,6 @@ async def resume_all_tasks(client):
         pass
 
     try:
-        # Batch-delete orphaned media in the Log Channel (ignores text messages)
         log_msgs = []
         async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=50):
             if old_log.media:
@@ -220,7 +221,6 @@ async def resume_all_tasks(client):
         for user_id, user_task_list in user_tasks_map.items():
             
             try:
-                # Batch-delete orphaned Batch Status and stuck queues in User PM
                 pm_msgs = []
                 async for old_msg in client.get_chat_history(user_id, limit=30):
                     text = old_msg.text or ""
@@ -292,7 +292,7 @@ async def rename_start(client, message):
         can_upload = await digital_botz.check_daily_limit(user_id, rkn_file.file_size)
         if not can_upload:
             btn = [[InlineKeyboardButton("💎 Gᴇᴛ Pʀᴇᴍɪᴜᴍ", callback_data="premium_plans")]]
-            return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
+            return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇד!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
 
     task_id = await digital_botz.add_task(user_id, message.id, 0)
     await manager.add_task(user_id, message, task_id)
@@ -342,21 +342,25 @@ async def download_worker(main_client, user_id):
             
             try:
                 state = manager.batch_state.get(user_id)
-                if state and not state.get('status_msg'):
+                if state and not state.get('status_msg') and user_id not in manager.silent_users:
                     try: 
                         state['status_msg'] = await main_client.send_message(user_id, "📊 **Iɴɪᴛɪᴀʟɪᴢɪɴɢ Bᴀᴛᴄʜ...**")
                     except Exception: 
-                        pass
+                        manager.silent_users.add(user_id)
                     
                 await manager.update_status_msg(user_id)
                 
                 rkn_processing = None
-                try: 
-                    rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
-                    await digital_botz.update_processing_msg(task_id, rkn_processing.id)
-                except Exception: 
-                    # 🛡️ SILENT FALLBACK: If preparing message fails (e.g. FloodWait), ignore and process silently!
-                    pass
+                if user_id not in manager.silent_users:
+                    try: 
+                        rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
+                        await digital_botz.update_processing_msg(task_id, rkn_processing.id)
+                    except Exception: 
+                        manager.silent_users.add(user_id)
+                        if rkn_processing:
+                            try: await rkn_processing.delete()
+                            except: pass
+                        rkn_processing = None
                 
                 await digital_botz.update_task_status(task_id, "processing")
                 rkn_file = getattr(message, message.media.value)
@@ -376,34 +380,30 @@ async def download_worker(main_client, user_id):
                 os.makedirs(task_renames_dir, exist_ok=True)
                 file_path = f"{task_renames_dir}/{new_filename}"
 
-                if rkn_processing:
+                if rkn_processing and user_id not in manager.silent_users:
                     try: 
                         await rkn_processing.edit("📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ...**")
                     except Exception: 
-                        pass
+                        manager.silent_users.add(user_id)
+                        try: await rkn_processing.delete()
+                        except: pass
+                        rkn_processing = None
                 
                 dl_path = None
                 log_msg_down = None
                 
                 # -----------------------------------------------------
-                # --- SELF-HEALING DOWNLOAD LOOP (DYNAMIC SCALING) ---
+                # --- SELF-HEALING DOWNLOAD LOOP (INFINITE RETRY) ---
                 # -----------------------------------------------------
                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
-                max_dl_attempts = max(3, len(workers_list) + 2)
-                attempts = 0
                 
-                while attempts < max_dl_attempts:
-                    if attempts > 0:
-                        # 🛡️ SILENT FALLBACK: Delete old progress bar entirely and go silent
-                        if rkn_processing:
-                            try: 
-                                await rkn_processing.delete()
-                            except Exception: 
-                                pass
+                while True:
+                    if user_id in manager.silent_users and rkn_processing:
+                        try: await rkn_processing.delete()
+                        except: pass
                         rkn_processing = None
 
                     try:
-                        # 🛡️ SELF-HEALING: Reconnect dead workers before downloading
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
                             except Exception: pass
@@ -418,13 +418,12 @@ async def download_worker(main_client, user_id):
                             worker_client.download_media(
                                 message=target_msg,
                                 file_name=file_path,
-                                progress=progress_for_pyrogram if rkn_processing else None,
-                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
+                                progress=progress_for_pyrogram if (rkn_processing and user_id not in manager.silent_users) else None,
+                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
                             ),
                             timeout=7200
                         )
                         
-                        # 🧹 INSTANT CLEANUP ON SUCCESS
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
                             except Exception: pass
@@ -433,15 +432,20 @@ async def download_worker(main_client, user_id):
                         break 
                         
                     except asyncio.TimeoutError:
-                        attempts += 1
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
                             except Exception: pass
                             log_msg_down = None
                         
-                        if attempts >= max_dl_attempts - 1:
-                            break
-                        await asyncio.sleep(5)
+                        if len(workers_list) > 1 and worker_client != main_client:
+                            worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
+                            worker_client = get_least_busy_worker(main_client)
+                            worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
+                            current_worker = worker_client
+                            await asyncio.sleep(2)
+                        else:
+                            await asyncio.sleep(5)
+                        continue
                         
                     except MessageIdInvalid:
                         if worker_client != main_client and log_msg_down:
@@ -455,38 +459,30 @@ async def download_worker(main_client, user_id):
                         return
                         
                     except Exception as e:
-                        # 🛡️ UNIVERSAL ERROR TRICK SHOT (Exhausts entire worker fleet)
-                        attempts += 1
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
                             except Exception: pass
                             log_msg_down = None
                             
+                        if isinstance(e, FloodWait):
+                            manager.silent_users.add(user_id)
+                            if rkn_processing:
+                                try: await rkn_processing.delete()
+                                except: pass
+                                rkn_processing = None
+
                         wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
 
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
                             worker_client = get_least_busy_worker(main_client)
                             worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
-                            current_worker = worker_client
+                            current_worker = worker_client 
                             await asyncio.sleep(2)
                         else:
-                            if attempts >= max_dl_attempts - 1:
-                                break
                             await asyncio.sleep(wait_time)
+                        continue
 
-                if not dl_path:
-                    if main_client.premium and main_client.uploadlimit:
-                        await digital_botz.increment_used_limit(user_id, -media.file_size)
-                    await digital_botz.delete_task(task_id)
-                    if rkn_processing:
-                        try: await rkn_processing.edit("⚠️ **Download Error:** Failed after retries (Server Timeout / Freeze).")
-                        except: pass
-                    else:
-                        try: await main_client.send_message(user_id, "⚠️ **Download Error:** Failed after retries (Server Timeout / Freeze).", reply_to_message_id=message.id)
-                        except: pass
-                    return
-                    
                 duration = 0
                 try:
                     parser = createParser(file_path)
@@ -538,15 +534,10 @@ async def download_worker(main_client, user_id):
                 if state:
                     state['processed'] += 1
                     await manager.update_status_msg(user_id)
-                    
-                if "MESSAGE_ID_INVALID" not in str(inner_e) and "Task Cancelled" not in str(inner_e):
-                    try: 
-                        await main_client.send_message(user_id, f"**Error:** {inner_e}", reply_to_message_id=message.id)
-                    except Exception: 
-                        pass
+                
+                continue
             
             finally:
-                # --- DYNAMIC ROTATION RELEASE (DOWNLOAD) ---
                 if current_worker != main_client:
                     worker_loads[current_worker] = max(0, worker_loads.get(current_worker, 0) - 1)
                 
@@ -602,12 +593,14 @@ async def upload_worker(main_client, user_id):
                         data = None 
                 
                 if not data:
-                    if candidate.get('rkn_processing'):
+                    if candidate.get('rkn_processing') and user_id not in manager.silent_users:
                         try: await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
-                        except Exception: pass
+                        except Exception: manager.silent_users.add(user_id)
                     break 
                     
                 rkn_processing = data.get('rkn_processing')
+                if user_id in manager.silent_users:
+                    rkn_processing = None
                 
                 # --- DYNAMIC ROTATION ALLOCATION (UPLOAD) ---
                 worker_client = get_least_busy_worker(main_client)
@@ -618,21 +611,12 @@ async def upload_worker(main_client, user_id):
                     worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
                 
                 try:
-                    # -----------------------------------------------------
-                    # --- SELF-HEALING UPLOAD LOOP (DYNAMIC SCALING) ---
-                    # -----------------------------------------------------
                     workers_list = getattr(Config, "WORKER_CLIENTS", [])
-                    max_up_attempts = max(3, len(workers_list) + 2)
-                    upload_attempts = 0
                     
-                    while upload_attempts < max_up_attempts:
-                        if upload_attempts > 0:
-                            # 🛡️ SILENT FALLBACK: Delete old progress bar entirely and go silent
-                            if rkn_processing:
-                                try: 
-                                    await rkn_processing.delete()
-                                except Exception: 
-                                    pass
+                    while True:
+                        if user_id in manager.silent_users and rkn_processing:
+                            try: await rkn_processing.delete()
+                            except: pass
                             rkn_processing = None
 
                         try:
@@ -641,101 +625,76 @@ async def upload_worker(main_client, user_id):
                                     try: await uploader.connect()
                                     except Exception: pass
 
+                                active_prog = progress_for_pyrogram if (rkn_processing and user_id not in manager.silent_users) else None
+                                active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
+
                                 if not is_main_bot:
                                     filw, error = await upload_files(
                                         uploader, Config.LOG_CHANNEL, data['upload_type'], data['file_path'], 
-                                        data['ph_path'], data['caption'], data['duration'], rkn_processing, data['new_filename']
+                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename']
                                     )
                                     if not error and filw:
                                         await asyncio.sleep(1.5)
-                                        try:
-                                            delivered = False
-                                            while not delivered:
+                                        delivered = False
+                                        while not delivered:
+                                            try:
+                                                await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                                                delivered = True
+                                            except FloodWait as fw:
+                                                manager.silent_users.add(user_id)
+                                                await asyncio.sleep(fw.value)
+                                            except Exception:
                                                 try:
-                                                    await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
+                                                    await uploader.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
                                                     delivered = True
-                                                except FloodWait as fw:
-                                                    await asyncio.sleep(fw.value)
                                                 except Exception:
-                                                    try:
-                                                        await uploader.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
-                                                        delivered = True
-                                                    except Exception:
-                                                        delivered = True 
+                                                    delivered = True 
                                         finally:
                                             for attempt in range(3):
                                                 try:
                                                     await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
                                                     break
-                                                except FloodWait:
-                                                    try: 
-                                                        await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
-                                                        break
-                                                    except Exception: 
-                                                        pass
                                                 except Exception:
-                                                    try: 
-                                                        await uploader.delete_messages(Config.LOG_CHANNEL, filw.id)
-                                                        break
-                                                    except Exception: 
-                                                        pass
+                                                    pass
                                     return error
                                 else:
-                                    # 🛡️ FIX: Added proper conditional arguments for main_bot upload block!
                                     if data['upload_type'] == "document":
-                                        await asyncio.wait_for(main_client.send_document(user_id, document=data['file_path'], file_name=data['new_filename'], thumb=data['ph_path'], caption=data['caption'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                        await asyncio.wait_for(main_client.send_document(user_id, document=data['file_path'], file_name=data['new_filename'], thumb=data['ph_path'], caption=data['caption'], progress=active_prog, progress_args=active_args), timeout=7200)
                                     elif data['upload_type'] == "video":
-                                        await asyncio.wait_for(main_client.send_video(user_id, video=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                        await asyncio.wait_for(main_client.send_video(user_id, video=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=active_prog, progress_args=active_args), timeout=7200)
                                     elif data['upload_type'] == "audio":
-                                        await asyncio.wait_for(main_client.send_audio(user_id, audio=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                        await asyncio.wait_for(main_client.send_audio(user_id, audio=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=active_prog, progress_args=active_args), timeout=7200)
                                     return None
 
                             if uploader == app:
                                 async with upload_lock:
-                                    if rkn_processing:
+                                    if rkn_processing and user_id not in manager.silent_users:
                                         try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                        except Exception: pass
+                                        except Exception: manager.silent_users.add(user_id)
                                     error = await perform_upload()
                             else:
-                                if rkn_processing:
+                                if rkn_processing and user_id not in manager.silent_users:
                                     try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                    except Exception: pass
+                                    except Exception: manager.silent_users.add(user_id)
                                 error = await perform_upload()
 
                             if error:
-                                wait_time = 5
                                 if str(error).startswith("FLOODWAIT:"):
+                                    manager.silent_users.add(user_id)
                                     try: wait_time = int(str(error).split(":")[1])
-                                    except: pass
+                                    except: wait_time = 5
+                                else:
+                                    wait_time = 5
 
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     uploader = get_least_busy_worker(main_client)
                                     worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
                                     is_main_bot = (uploader == main_client)
-                                    upload_attempts += 1
                                     await asyncio.sleep(2)
                                     continue
                                 else:
-                                    if upload_attempts >= max_up_attempts - 1:
-                                        if main_client.premium and main_client.uploadlimit:
-                                            await digital_botz.increment_used_limit(user_id, -data['file_size'])
-                                        await digital_botz.delete_task(data['task_id'])
-                                        state = manager.batch_state.get(user_id)
-                                        if state:
-                                            state['processed'] += 1
-                                            await manager.update_status_msg(user_id)
-                                            
-                                        if "MESSAGE_ID_INVALID" not in str(error):
-                                            if rkn_processing:
-                                                try: await rkn_processing.edit(f"⚠️ **Telegram Error / Timeout:** {error}")
-                                                except: pass
-                                            else:
-                                                try: await main_client.send_message(user_id, f"⚠️ **Telegram Error / Timeout:** {error}", reply_to_message_id=data['message'].id)
-                                                except: pass
-                                        break
                                     await asyncio.sleep(wait_time)
-                                    upload_attempts += 1
                                     continue
                                     
                             else:
@@ -748,22 +707,37 @@ async def upload_worker(main_client, user_id):
                                     state['total_bytes'] += data['file_size']
                                     await manager.update_status_msg(user_id)
                                     
-                                if rkn_processing:
+                                if rkn_processing and user_id not in manager.silent_users:
                                     try: 
-                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
+                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
                                         await asyncio.sleep(2)
                                         await rkn_processing.delete()
                                     except Exception: 
                                         pass
                                 break
 
-                        except Exception as perform_e:
-                            print(f"Upload loop crash: {perform_e}")
+                        except asyncio.TimeoutError:
+                            if uploader != app and len(workers_list) > 1 and not is_main_bot:
+                                worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
+                                uploader = get_least_busy_worker(main_client)
+                                worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
+                                is_main_bot = (uploader == main_client)
+                                await asyncio.sleep(2)
+                                continue
+                            else:
+                                await asyncio.sleep(5)
+                                continue
+
+                        except MessageIdInvalid:
+                            if main_client.premium and main_client.uploadlimit:
+                                await digital_botz.increment_used_limit(user_id, -data['file_size'])
                             await digital_botz.delete_task(data['task_id'])
-                            state = manager.batch_state.get(user_id)
-                            if state:
-                                state['processed'] += 1
-                                await manager.update_status_msg(user_id)
+                            raise Exception("MessageIdInvalid")
+                            
+                        except Exception as perform_e:
+                            if isinstance(perform_e, FloodWait):
+                                manager.silent_users.add(user_id)
+                            print(f"Upload loop crash: {perform_e}")
                             break
 
                 except Exception as inner_e:
@@ -775,13 +749,7 @@ async def upload_worker(main_client, user_id):
                         state['processed'] += 1
                         await manager.update_status_msg(user_id)
                         
-                    if "MESSAGE_ID_INVALID" not in str(inner_e):
-                        try: 
-                            await main_client.send_message(user_id, f"**Upload Error:** {inner_e}", reply_to_message_id=data['message'].id)
-                        except Exception: 
-                            pass
                 finally:
-                    # --- DYNAMIC ROTATION RELEASE (UPLOAD) ---
                     if uploader != main_client and uploader != app:
                         worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
 
@@ -799,26 +767,34 @@ async def upload_worker(main_client, user_id):
     finally:
         state = manager.batch_state.get(user_id)
         if state and state.get('status_msg'):
-            try: 
-                await state['status_msg'].edit("✅ **Aʟʟ Fɪʟᴇꜱ ɪɴ Bᴀᴛᴄʜ Pʀᴏᴄᴇꜱꜱᴇᴅ!**")
-            except Exception: 
-                pass
+            if user_id not in manager.silent_users:
+                try: 
+                    await state['status_msg'].edit("✅ **Aʟʟ Fɪʟᴇꜱ ɪɴ Bᴀᴛᴄʜ Pʀᴏᴄᴇꜱꜱᴇᴅ!**")
+                except Exception: 
+                    pass
+            else:
+                try:
+                    await state['status_msg'].delete()
+                except Exception:
+                    pass
             
         manager.cleanup(user_id)
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
+        active_prog = progress_for_pyrogram if rkn_processing else None
+        active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
+
         if upload_type == "document":
-            filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=active_prog, progress_args=active_args), timeout=7200)
         elif upload_type == "video":
-            filw = await asyncio.wait_for(bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=active_prog, progress_args=active_args), timeout=7200)
         elif upload_type == "audio":
-            filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=active_prog, progress_args=active_args), timeout=7200)
         return filw, None
     except asyncio.TimeoutError:
         return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
-        # Treats RuntimeError, 503 Internal Server Error, etc. uniformly so they trigger the worker swap
         return None, str(e)
