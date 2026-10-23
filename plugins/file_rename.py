@@ -418,7 +418,7 @@ async def download_worker(main_client, user_id):
                             worker_client.download_media(
                                 message=target_msg,
                                 file_name=file_path,
-                                progress=progress_for_pyrogram,
+                                progress=progress_for_pyrogram if rkn_processing else None,
                                 progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
                             ),
                             timeout=7200
@@ -806,11 +806,11 @@ async def upload_worker(main_client, user_id):
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
         if upload_type == "document":
-            filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         elif upload_type == "video":
-            filw = await asyncio.wait_for(bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_video(sender_id, video=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         elif upload_type == "audio":
-            filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+            filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
         return filw, None
     except asyncio.TimeoutError:
         return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
