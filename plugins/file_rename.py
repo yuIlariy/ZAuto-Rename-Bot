@@ -155,8 +155,6 @@ class QueueManager:
         )
         try:
             await state['status_msg'].edit(text)
-        except FloodWait: 
-            pass
         except Exception: 
             pass
 
@@ -353,11 +351,8 @@ async def download_worker(main_client, user_id):
                 try: 
                     rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
                     await digital_botz.update_processing_msg(task_id, rkn_processing.id)
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value)
-                    rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
-                    await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                 except Exception: 
+                    # 🛡️ SILENT FALLBACK: If preparing message fails (e.g. FloodWait), ignore and process silently!
                     pass
                 
                 await digital_botz.update_task_status(task_id, "processing")
@@ -392,8 +387,11 @@ async def download_worker(main_client, user_id):
                 # --- SELF-HEALING DOWNLOAD LOOP ---
                 # -----------------------------------------------------
                 while attempts < 3:
+                    if attempts > 0:
+                        # 🛡️ SILENT FALLBACK: If retrying, turn off progress bar to avoid rate limits killing it
+                        rkn_processing = None
+
                     try:
-                        # 🛡️ SELF-HEALING: Reconnect dead workers before downloading
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
                             except Exception: pass
@@ -409,7 +407,7 @@ async def download_worker(main_client, user_id):
                                 message=target_msg,
                                 file_name=file_path,
                                 progress=progress_for_pyrogram,
-                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time())
+                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
                             ),
                             timeout=7200
                         )
@@ -434,7 +432,7 @@ async def download_worker(main_client, user_id):
                         return
                         
                     except Exception as e:
-                        # 🛡️ UNIVERSAL ERROR TRICK SHOT (Handles Timeout, FloodWait, Runtime Dead Sockets, -503 Server Error)
+                        # 🛡️ UNIVERSAL ERROR TRICK SHOT
                         attempts += 1
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
@@ -450,6 +448,7 @@ async def download_worker(main_client, user_id):
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
                             worker_client = get_least_busy_worker(main_client)
                             worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
+                            current_worker = worker_client
                             await asyncio.sleep(2)
                         else:
                             await asyncio.sleep(wait_time)
@@ -572,13 +571,9 @@ async def upload_worker(main_client, user_id):
                         data = None 
                 
                 if not data:
-                    try:
-                        if candidate.get('rkn_processing'):
-                            await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
-                    except FloodWait as fw:
-                        await asyncio.sleep(fw.value)
-                    except Exception: 
-                        pass
+                    if candidate.get('rkn_processing'):
+                        try: await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
+                        except Exception: pass # 🛡️ Fixed: Removed block sleep on Floodwait
                     break 
                     
                 rkn_processing = data.get('rkn_processing')
@@ -594,9 +589,12 @@ async def upload_worker(main_client, user_id):
                 try:
                     upload_attempts = 0
                     while upload_attempts < 3:
+                        if upload_attempts > 0:
+                            # 🛡️ SILENT FALLBACK: If retrying, turn off progress bar to dodge rate limits
+                            rkn_processing = None
+
                         try:
                             async def perform_upload():
-                                # 🛡️ SELF-HEALING: Reconnect dead uploaders before starting
                                 if not uploader.is_connected:
                                     try: await uploader.connect()
                                     except Exception: pass
@@ -650,21 +648,16 @@ async def upload_worker(main_client, user_id):
                             if uploader == app:
                                 async with upload_lock:
                                     if rkn_processing:
-                                        try: 
-                                            await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                        except Exception: 
-                                            pass
+                                        try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                                        except Exception: pass
                                     error = await perform_upload()
                             else:
                                 if rkn_processing:
-                                    try: 
-                                        await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
-                                    except Exception: 
-                                        pass
+                                    try: await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
+                                    except Exception: pass
                                 error = await perform_upload()
 
                             if error:
-                                # 🛡️ UNIVERSAL ERROR TRICK SHOT (Instantly drop failing worker on any upload error)
                                 wait_time = 5
                                 if str(error).startswith("FLOODWAIT:"):
                                     try: wait_time = int(str(error).split(":")[1])
@@ -672,7 +665,6 @@ async def upload_worker(main_client, user_id):
 
                                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
-                                    # Swap worker dynamically on any error (FloodWait, Server Error, Dead Socket, TimeoutError)
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     uploader = get_least_busy_worker(main_client)
                                     worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
@@ -778,5 +770,4 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
-        # Treats RuntimeError, 503 Internal Server Error, etc. uniformly so they trigger the worker swap
         return None, str(e)
