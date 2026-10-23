@@ -681,11 +681,14 @@ async def upload_worker(main_client, user_id):
                                                         pass
                                     return error
                                 else:
-                                    filw, error = await upload_files(
-                                        uploader, data['user_id'], data['upload_type'], data['file_path'], 
-                                        data['ph_path'], data['caption'], data['duration'], rkn_processing, data['new_filename']
-                                    )
-                                    return error
+                                    # 🛡️ FIX: Added proper conditional arguments for main_bot upload block!
+                                    if data['upload_type'] == "document":
+                                        await asyncio.wait_for(main_client.send_document(user_id, document=data['file_path'], file_name=data['new_filename'], thumb=data['ph_path'], caption=data['caption'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                    elif data['upload_type'] == "video":
+                                        await asyncio.wait_for(main_client.send_video(user_id, video=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                    elif data['upload_type'] == "audio":
+                                        await asyncio.wait_for(main_client.send_audio(user_id, audio=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=progress_for_pyrogram if rkn_processing else None, progress_args=(UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()), timeout=7200)
+                                    return None
 
                             if uploader == app:
                                 async with upload_lock:
