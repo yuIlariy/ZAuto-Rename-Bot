@@ -61,7 +61,7 @@ logging.basicConfig(
 #logger = logging.getLogger(__name__)
 
 # --- LOGGING MUZZLES (Method 3) ---
-logging.getLogger("pyrofork").setLevel(logging.WARNING) # Kept untouched
+logging.getLogger("wzgram").setLevel(logging.WARNING) # Kept untouched
 logging.getLogger("hachoir").setLevel(logging.ERROR)    # Silences the 2GB ZIP warnings
 logging.getLogger("aiohttp").setLevel(logging.ERROR)    # Silences routine web server logs
 # ----------------------------------
