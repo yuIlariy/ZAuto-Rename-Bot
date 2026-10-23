@@ -1,3 +1,4 @@
+#pyr
 wzgram[fast]
 pymongo>=4.16.0
 beanie>=2.1.0
