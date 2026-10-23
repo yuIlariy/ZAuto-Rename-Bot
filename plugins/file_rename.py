@@ -100,7 +100,7 @@ class QueueManager:
         self.locks = {}
         self.worker_locks = {}
         self.batch_state = {} 
-        self.silent_users = set()  # 🛡️ Tracks users forced into stealth mode for this batch
+        self.silent_users = set()  # Tracks users forced into stealth mode for this batch
 
     async def get_lock(self, user_id):
         if user_id not in self.locks:
@@ -133,7 +133,7 @@ class QueueManager:
 
     async def update_status_msg(self, user_id):
         if user_id in self.silent_users:
-            return  # 🛡️ Complete silence when user is rate-limited
+            return  
             
         state = self.batch_state.get(user_id)
         if not state or not state.get('status_msg'): 
@@ -195,15 +195,20 @@ async def resume_all_tasks(client):
     except Exception: 
         pass
 
+    # 🛡️ FIX 2: Bulletproof Log Channel Ghost Cleanup
     try:
         log_msgs = []
-        async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=50):
-            if old_log.media:
+        async for old_log in client.get_chat_history(Config.LOG_CHANNEL, limit=100):
+            if getattr(old_log, "media", None):
                 log_msgs.append(old_log.id)
         if log_msgs:
-            await client.delete_messages(Config.LOG_CHANNEL, log_msgs)
-    except Exception: 
-        pass
+            for i in range(0, len(log_msgs), 100):
+                try: 
+                    await client.delete_messages(Config.LOG_CHANNEL, log_msgs[i:i+100])
+                except Exception: 
+                    pass
+    except Exception as e: 
+        print(f"Log Channel Cleanup Failed: {e}")
 
     try:
         tasks = await Task.find_all().to_list()
@@ -221,12 +226,14 @@ async def resume_all_tasks(client):
         for user_id, user_task_list in user_tasks_map.items():
             try:
                 pm_msgs = []
-                async for old_msg in client.get_chat_history(user_id, limit=30):
+                async for old_msg in client.get_chat_history(user_id, limit=50):
                     text = old_msg.text or ""
                     if "Bᴀᴛᴄʜ Sᴛᴀᴛᴜꜱ" in text or "Pʀᴇᴘᴀʀɪɴɢ" in text or "Wᴀɪᴛɪɴɢ" in text or "Uᴩʟᴏᴀᴅɪɴɢ" in text or "Dᴏᴡɴʟᴏᴀᴅɪɴɢ" in text:
                         pm_msgs.append(old_msg.id)
                 if pm_msgs:
-                    await client.delete_messages(user_id, pm_msgs)
+                    for i in range(0, len(pm_msgs), 100):
+                        try: await client.delete_messages(user_id, pm_msgs[i:i+100])
+                        except: pass
             except Exception:
                 pass
 
@@ -239,7 +246,6 @@ async def resume_all_tasks(client):
                         except Exception: 
                             pass
                     
-                    # 🛡️ FIX 1: Safely grab the correct message ID and explicitly NUKE the old task so zombie files don't revive
                     msg_id = getattr(task, "file_msg_id", getattr(task, "message_id", None))
                     msg = None
                     if msg_id:
@@ -249,8 +255,10 @@ async def resume_all_tasks(client):
                     try: await task.delete()
                     except Exception: pass
 
-                    if msg and getattr(msg, "empty", True) == False:
+                    # 🛡️ FIX 1: Safely evaluate Pyrogram messages to ensure valid messages are added
+                    if msg and not getattr(msg, "empty", False):
                         valid_msgs.append(msg)
+
                 except Exception as e:
                     print(f"Failed to fetch task {getattr(task, 'id', 'unknown')}: {e}")
                     try: await task.delete()
@@ -269,6 +277,13 @@ async def resume_all_tasks(client):
 
                 for msg in valid_msgs:
                     try:
+                        # Fallback injection to ensure message has from_user property if stripped by get_messages
+                        if not getattr(msg, "from_user", None):
+                            class DummyUser:
+                                def __init__(self, uid):
+                                    self.id = uid
+                            msg.from_user = DummyUser(user_id)
+                            
                         await rename_start(client, msg)
                         count += 1
                     except Exception as e:
@@ -452,7 +467,10 @@ async def download_worker(main_client, user_id):
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
                             except Exception: pass
                             log_msg_down = None
-                        # 🛡️ FIX 2: Raise exception to gracefully skip file instead of murdering the worker with `return`!
+                            
+                        if main_client.premium and main_client.uploadlimit:
+                            await digital_botz.increment_used_limit(user_id, -media.file_size)
+                        await digital_botz.delete_task(task_id)
                         raise Exception("MessageIdInvalid")
                         
                     except Exception as e:
@@ -480,6 +498,12 @@ async def download_worker(main_client, user_id):
                             await asyncio.sleep(wait_time)
                         continue
 
+                if not dl_path:
+                    if main_client.premium and main_client.uploadlimit:
+                        await digital_botz.increment_used_limit(user_id, -media.file_size)
+                    await digital_botz.delete_task(task_id)
+                    continue
+                    
                 duration = 0
                 try:
                     parser = createParser(file_path)
