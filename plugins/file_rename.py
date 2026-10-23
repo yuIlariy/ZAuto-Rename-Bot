@@ -100,7 +100,7 @@ class QueueManager:
         self.locks = {}
         self.worker_locks = {}
         self.batch_state = {} 
-        self.silent_users = set()  # Tracks users forced into stealth mode for this batch
+        self.silent_users = set()  # 🛡️ Tracks users forced into stealth mode for this batch
 
     async def get_lock(self, user_id):
         if user_id not in self.locks:
@@ -133,7 +133,7 @@ class QueueManager:
 
     async def update_status_msg(self, user_id):
         if user_id in self.silent_users:
-            return  
+            return  # 🛡️ Complete silence when user is rate-limited
             
         state = self.batch_state.get(user_id)
         if not state or not state.get('status_msg'): 
@@ -238,14 +238,23 @@ async def resume_all_tasks(client):
                             await client.delete_messages(user_id, task.processing_msg_id)
                         except Exception: 
                             pass
-                            
-                    msg = await client.get_messages(user_id, task.message_id)
-                    await task.delete()
+                    
+                    # 🛡️ FIX 1: Safely grab the correct message ID and explicitly NUKE the old task so zombie files don't revive
+                    msg_id = getattr(task, "file_msg_id", getattr(task, "message_id", None))
+                    msg = None
+                    if msg_id:
+                        try: msg = await client.get_messages(user_id, msg_id)
+                        except Exception: pass
+                    
+                    try: await task.delete()
+                    except Exception: pass
 
-                    if msg and not msg.empty:
+                    if msg and getattr(msg, "empty", True) == False:
                         valid_msgs.append(msg)
                 except Exception as e:
-                    print(f"Failed to fetch task {task.id}: {e}")
+                    print(f"Failed to fetch task {getattr(task, 'id', 'unknown')}: {e}")
+                    try: await task.delete()
+                    except: pass
 
             if valid_msgs:
                 try:
@@ -443,11 +452,8 @@ async def download_worker(main_client, user_id):
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
                             except Exception: pass
                             log_msg_down = None
-                            
-                        if main_client.premium and main_client.uploadlimit:
-                            await digital_botz.increment_used_limit(user_id, -media.file_size)
-                        await digital_botz.delete_task(task_id)
-                        return
+                        # 🛡️ FIX 2: Raise exception to gracefully skip file instead of murdering the worker with `return`!
+                        raise Exception("MessageIdInvalid")
                         
                     except Exception as e:
                         if worker_client != main_client and log_msg_down:
@@ -474,12 +480,6 @@ async def download_worker(main_client, user_id):
                             await asyncio.sleep(wait_time)
                         continue
 
-                if not dl_path:
-                    if main_client.premium and main_client.uploadlimit:
-                        await digital_botz.increment_used_limit(user_id, -media.file_size)
-                    await digital_botz.delete_task(task_id)
-                    continue
-                    
                 duration = 0
                 try:
                     parser = createParser(file_path)
@@ -702,16 +702,12 @@ async def upload_worker(main_client, user_id):
                                     state['total_bytes'] += data['file_size']
                                     await manager.update_status_msg(user_id)
                                     
-                                if rkn_processing:
-                                    if user_id not in manager.silent_users:
-                                        try: 
-                                            await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
-                                            await asyncio.sleep(2)
-                                        except Exception: 
-                                            pass
-                                    try:
+                                if rkn_processing and user_id not in manager.silent_users:
+                                    try: 
+                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
+                                        await asyncio.sleep(2)
                                         await rkn_processing.delete()
-                                    except Exception:
+                                    except Exception: 
                                         pass
                                 break
 
