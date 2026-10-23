@@ -642,13 +642,12 @@ async def upload_worker(main_client, user_id):
                                                     delivered = True
                                                 except Exception:
                                                     delivered = True 
-                                        finally:
-                                            for attempt in range(3):
-                                                try:
-                                                    await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
-                                                    break
-                                                except Exception:
-                                                    pass
+                                        for attempt in range(3):
+                                            try:
+                                                await main_client.delete_messages(Config.LOG_CHANNEL, filw.id)
+                                                break
+                                            except Exception:
+                                                pass
                                     return error
                                 else:
                                     active_prog = progress_for_pyrogram if (rkn_processing and user_id not in manager.silent_users) else None
