@@ -70,6 +70,7 @@ class Task(Document):
     user_id: int
     message_id: int
     processing_msg_id: int = 0 
+    log_msg_id: int = 0  # 🛡️ NEW: Blueprint addition to securely track ghost files in Log Channel
     status: str = "pending"  
     created_at: float = Field(default_factory=time.time)
 
