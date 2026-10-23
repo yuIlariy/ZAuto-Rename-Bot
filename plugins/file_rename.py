@@ -133,7 +133,7 @@ class QueueManager:
 
     async def update_status_msg(self, user_id):
         if user_id in self.silent_users:
-            return  # Completely skip updates if silent mode is triggered
+            return  
             
         state = self.batch_state.get(user_id)
         if not state or not state.get('status_msg'): 
@@ -695,7 +695,7 @@ async def upload_worker(main_client, user_id):
                                     
                             else:
                                 await digital_botz.update_daily_limit(user_id, data['file_size'])
-                                await digital_botz.delete_task(data['task_id'])
+                                await digital_botz.delete_task(task_id)
                                 
                                 state = manager.batch_state.get(user_id)
                                 if state:
@@ -705,7 +705,7 @@ async def upload_worker(main_client, user_id):
                                     
                                 if rkn_processing and user_id not in manager.silent_users:
                                     try: 
-                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
+                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
                                         await asyncio.sleep(2)
                                         await rkn_processing.delete()
                                     except Exception: 
