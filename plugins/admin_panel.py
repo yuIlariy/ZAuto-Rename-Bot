@@ -33,10 +33,10 @@ from helper.database import digital_botz
 from helper.utils import get_seconds, humanbytes
 import os, sys, time, asyncio, logging, datetime, pytz, traceback
 
-# pyrogram imports
-from pyrogram.types import Message
-from pyrogram import Client, filters
-from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
+# wzgram imports
+from wzgram.types import Message
+from wzgram import Client, filters
+from wzgram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
 
 
 logger = logging.getLogger(__name__)

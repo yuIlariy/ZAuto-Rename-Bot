@@ -30,8 +30,8 @@ License Link : https://github.com/DigitalBotz/Digital-Rename-Bot/blob/main/LICEN
 """
 
 # imports
-from pyrogram import Client, filters 
-from pyrogram.errors import FloodWait
+from wzgram import Client, filters 
+from wzgram.errors import FloodWait
 from helper.database import digital_botz
 
 # --- THE IMMORTAL BYPASS HELPER ---

@@ -6,9 +6,9 @@
 # Special Thanks To @ReshamOwner
 # Update Channel @Digital_Botz & @DigitalBotz_Support
 
-from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors import ListenerTimeout
+from wzgram import Client, filters
+from wzgram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from wzgram.errors import ListenerTimeout
 
 # extra imports
 from helper.database import digital_botz

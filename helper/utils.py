@@ -34,10 +34,10 @@ License Link : https://github.com/DigitalBotz/Digital-Auto-Rename-Bot/blob/main/
 import math, time, re, datetime, pytz, os
 from config import Config, rkn 
 
-# pyrogram imports
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+# wzgram imports
+from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-async def progress_for_pyrogram(current, total, ud_type, message, start):
+async def progress_for_wzgram(current, total, ud_type, message, start):
     now = time.time()
     diff = now - start
     if round(diff % 5.00) == 0 or current == total:        

@@ -13,9 +13,9 @@ Copyright (c) 2025 @Digital_Botz
 # extra imports
 import random, asyncio, datetime, pytz, time, psutil, shutil
 
-# pyrogram imports
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, CallbackQuery
+# wzgram imports
+from wzgram import Client, filters
+from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, CallbackQuery
 
 # bots imports
 from helper.database import digital_botz

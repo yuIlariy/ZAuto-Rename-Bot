@@ -12,11 +12,11 @@ The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 """
 
-# pyrogram imports
-from pyrogram import Client, filters, enums 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors import UserNotParticipant
-from pyrogram import StopPropagation # <--- The Magic Kill Switch
+# wzgram imports
+from wzgram import Client, filters, enums 
+from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from wzgram.errors import UserNotParticipant
+from wzgram import StopPropagation # <--- The Magic Kill Switch
 
 # extra imports
 from config import Config

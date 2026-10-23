@@ -40,10 +40,10 @@ import glob, sys
 import importlib.util
 from pathlib import Path
 
-# pyrogram imports
-from pyrogram import Client, __version__, errors
-from pyrogram.raw.all import layer
-from pyrogram import idle
+# wzgram imports
+from wzgram import Client, __version__, errors
+from wzgram.raw.all import layer
+from wzgram import idle
 
 # bots imports
 from config import Config

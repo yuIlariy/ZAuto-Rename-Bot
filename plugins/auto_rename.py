@@ -12,9 +12,9 @@ import re
 import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
-from pyrogram.errors import MessageNotModified
+from wzgram import Client, filters
+from wzgram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
+from wzgram.errors import MessageNotModified
 from datetime import datetime
 import asyncio
 from helper.database import digital_botz

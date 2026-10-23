@@ -10,12 +10,12 @@ Apache License 2.0
 Copyright (c) 2025 @Digital_Botz
 """
 
-# pyrogram imports
-from pyrogram import Client, filters
-from pyrogram.enums import MessageMediaType
-from pyrogram.errors import FloodWait, MessageIdInvalid
-from pyrogram.file_id import FileId
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+# wzgram imports
+from wzgram import Client, filters
+from wzgram.enums import MessageMediaType
+from wzgram.errors import FloodWait, MessageIdInvalid
+from wzgram.file_id import FileId
+from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
 # hachoir imports
 from hachoir.metadata import extractMetadata
@@ -23,7 +23,7 @@ from hachoir.parser import createParser
 from PIL import Image
 
 # bots imports
-from helper.utils import progress_for_pyrogram, convert, humanbytes, add_prefix_suffix, remove_path
+from helper.utils import progress_for_wzgram, convert, humanbytes, add_prefix_suffix, remove_path
 from helper.database import digital_botz, Task 
 from config import Config
 from plugins.auto_rename import EnhancedAutoRenamer
@@ -454,7 +454,7 @@ async def download_worker(main_client, user_id):
                             worker_client.download_media(
                                 message=target_msg,
                                 file_name=file_path,
-                                progress=progress_for_pyrogram if (rkn_processing and user_id not in manager.silent_users) else None,
+                                progress=progress_for_wzgram if (rkn_processing and user_id not in manager.silent_users) else None,
                                 progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
                             ),
                             timeout=7200
@@ -702,7 +702,7 @@ async def upload_worker(main_client, user_id):
                                                 pass
                                     return error
                                 else:
-                                    active_prog = progress_for_pyrogram if (rkn_processing and user_id not in manager.silent_users) else None
+                                    active_prog = progress_for_wzgram if (rkn_processing and user_id not in manager.silent_users) else None
                                     active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
 
                                     if data['upload_type'] == "document":
@@ -857,7 +857,7 @@ async def upload_worker(main_client, user_id):
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
-        active_prog = progress_for_pyrogram if rkn_processing else None
+        active_prog = progress_for_wzgram if rkn_processing else None
         active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
 
         if upload_type == "document":
