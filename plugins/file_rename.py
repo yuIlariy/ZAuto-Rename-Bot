@@ -155,6 +155,8 @@ class QueueManager:
         )
         try:
             await state['status_msg'].edit(text)
+        except FloodWait: 
+            pass
         except Exception: 
             pass
 
@@ -334,6 +336,7 @@ async def download_worker(main_client, user_id):
             
             # --- DYNAMIC ROTATION ALLOCATION (DOWNLOAD) ---
             worker_client = get_least_busy_worker(main_client)
+            current_worker = worker_client
             if worker_client != main_client:
                 worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
             
@@ -381,17 +384,26 @@ async def download_worker(main_client, user_id):
                 
                 dl_path = None
                 log_msg_down = None
-                attempts = 0
                 
                 # -----------------------------------------------------
-                # --- SELF-HEALING DOWNLOAD LOOP ---
+                # --- SELF-HEALING DOWNLOAD LOOP (DYNAMIC SCALING) ---
                 # -----------------------------------------------------
-                while attempts < 3:
+                workers_list = getattr(Config, "WORKER_CLIENTS", [])
+                max_dl_attempts = max(3, len(workers_list) + 2)
+                attempts = 0
+                
+                while attempts < max_dl_attempts:
                     if attempts > 0:
-                        # 🛡️ SILENT FALLBACK: If retrying, turn off progress bar to avoid rate limits killing it
+                        # 🛡️ SILENT FALLBACK: Delete old progress bar entirely and go silent
+                        if rkn_processing:
+                            try: 
+                                await rkn_processing.delete()
+                            except Exception: 
+                                pass
                         rkn_processing = None
 
                     try:
+                        # 🛡️ SELF-HEALING: Reconnect dead workers before downloading
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
                             except Exception: pass
@@ -420,6 +432,17 @@ async def download_worker(main_client, user_id):
                             
                         break 
                         
+                    except asyncio.TimeoutError:
+                        attempts += 1
+                        if worker_client != main_client and log_msg_down:
+                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
+                            except Exception: pass
+                            log_msg_down = None
+                        
+                        if attempts >= max_dl_attempts - 1:
+                            break
+                        await asyncio.sleep(5)
+                        
                     except MessageIdInvalid:
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
@@ -432,7 +455,7 @@ async def download_worker(main_client, user_id):
                         return
                         
                     except Exception as e:
-                        # 🛡️ UNIVERSAL ERROR TRICK SHOT
+                        # 🛡️ UNIVERSAL ERROR TRICK SHOT (Exhausts entire worker fleet)
                         attempts += 1
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
@@ -440,10 +463,7 @@ async def download_worker(main_client, user_id):
                             log_msg_down = None
                             
                         wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
-                        if isinstance(e, asyncio.TimeoutError):
-                            wait_time = 5
 
-                        workers_list = getattr(Config, "WORKER_CLIENTS", [])
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
                             worker_client = get_least_busy_worker(main_client)
@@ -451,11 +471,22 @@ async def download_worker(main_client, user_id):
                             current_worker = worker_client
                             await asyncio.sleep(2)
                         else:
+                            if attempts >= max_dl_attempts - 1:
+                                break
                             await asyncio.sleep(wait_time)
 
                 if not dl_path:
-                    raise Exception("Failed to download file after retries (Network Freeze or Server Timeout).")
-
+                    if main_client.premium and main_client.uploadlimit:
+                        await digital_botz.increment_used_limit(user_id, -media.file_size)
+                    await digital_botz.delete_task(task_id)
+                    if rkn_processing:
+                        try: await rkn_processing.edit("⚠️ **Download Error:** Failed after retries (Server Timeout / Freeze).")
+                        except: pass
+                    else:
+                        try: await main_client.send_message(user_id, "⚠️ **Download Error:** Failed after retries (Server Timeout / Freeze).", reply_to_message_id=message.id)
+                        except: pass
+                    return
+                    
                 duration = 0
                 try:
                     parser = createParser(file_path)
@@ -516,8 +547,8 @@ async def download_worker(main_client, user_id):
             
             finally:
                 # --- DYNAMIC ROTATION RELEASE (DOWNLOAD) ---
-                if worker_client != main_client:
-                    worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
+                if current_worker != main_client:
+                    worker_loads[current_worker] = max(0, worker_loads.get(current_worker, 0) - 1)
                 
                 async with lock:
                     if user_id in manager.active_downloads and sort_key in manager.active_downloads[user_id]:
@@ -573,7 +604,7 @@ async def upload_worker(main_client, user_id):
                 if not data:
                     if candidate.get('rkn_processing'):
                         try: await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
-                        except Exception: pass # 🛡️ Fixed: Removed block sleep on Floodwait
+                        except Exception: pass
                     break 
                     
                 rkn_processing = data.get('rkn_processing')
@@ -587,10 +618,21 @@ async def upload_worker(main_client, user_id):
                     worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
                 
                 try:
+                    # -----------------------------------------------------
+                    # --- SELF-HEALING UPLOAD LOOP (DYNAMIC SCALING) ---
+                    # -----------------------------------------------------
+                    workers_list = getattr(Config, "WORKER_CLIENTS", [])
+                    max_up_attempts = max(3, len(workers_list) + 2)
                     upload_attempts = 0
-                    while upload_attempts < 3:
+                    
+                    while upload_attempts < max_up_attempts:
                         if upload_attempts > 0:
-                            # 🛡️ SILENT FALLBACK: If retrying, turn off progress bar to dodge rate limits
+                            # 🛡️ SILENT FALLBACK: Delete old progress bar entirely and go silent
+                            if rkn_processing:
+                                try: 
+                                    await rkn_processing.delete()
+                                except Exception: 
+                                    pass
                             rkn_processing = None
 
                         try:
@@ -663,7 +705,6 @@ async def upload_worker(main_client, user_id):
                                     try: wait_time = int(str(error).split(":")[1])
                                     except: pass
 
-                                workers_list = getattr(Config, "WORKER_CLIENTS", [])
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     uploader = get_least_busy_worker(main_client)
@@ -673,7 +714,9 @@ async def upload_worker(main_client, user_id):
                                     await asyncio.sleep(2)
                                     continue
                                 else:
-                                    if upload_attempts >= 2:
+                                    if upload_attempts >= max_up_attempts - 1:
+                                        if main_client.premium and main_client.uploadlimit:
+                                            await digital_botz.increment_used_limit(user_id, -data['file_size'])
                                         await digital_botz.delete_task(data['task_id'])
                                         state = manager.batch_state.get(user_id)
                                         if state:
@@ -681,8 +724,12 @@ async def upload_worker(main_client, user_id):
                                             await manager.update_status_msg(user_id)
                                             
                                         if "MESSAGE_ID_INVALID" not in str(error):
-                                            try: await main_client.send_message(user_id, f"**Eʀʀᴏʀ:** {error}", reply_to_message_id=data['message'].id)
-                                            except Exception: pass
+                                            if rkn_processing:
+                                                try: await rkn_processing.edit(f"⚠️ **Telegram Error / Timeout:** {error}")
+                                                except: pass
+                                            else:
+                                                try: await main_client.send_message(user_id, f"⚠️ **Telegram Error / Timeout:** {error}", reply_to_message_id=data['message'].id)
+                                                except: pass
                                         break
                                     await asyncio.sleep(wait_time)
                                     upload_attempts += 1
@@ -700,7 +747,7 @@ async def upload_worker(main_client, user_id):
                                     
                                 if rkn_processing:
                                     try: 
-                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
+                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
                                         await asyncio.sleep(2)
                                         await rkn_processing.delete()
                                     except Exception: 
@@ -770,4 +817,5 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
+        # Treats RuntimeError, 503 Internal Server Error, etc. uniformly so they trigger the worker swap
         return None, str(e)
