@@ -694,7 +694,7 @@ async def upload_worker(main_client, user_id):
                                     
                             else:
                                 await digital_botz.update_daily_limit(user_id, data['file_size'])
-                                await digital_botz.delete_task(task_id)
+                                await digital_botz.delete_task(data['task_id'])
                                 
                                 state = manager.batch_state.get(user_id)
                                 if state:
@@ -702,12 +702,16 @@ async def upload_worker(main_client, user_id):
                                     state['total_bytes'] += data['file_size']
                                     await manager.update_status_msg(user_id)
                                     
-                                if rkn_processing and user_id not in manager.silent_users:
-                                    try: 
-                                        await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜱꜰᴜʟʟy!**")
-                                        await asyncio.sleep(2)
+                                if rkn_processing:
+                                    if user_id not in manager.silent_users:
+                                        try: 
+                                            await rkn_processing.edit("✅ **Uᴩʟᴏᴀᴅᴇᴅ Sᴜᴄᴄᴇꜱꜰᴜʟʟy!**")
+                                            await asyncio.sleep(2)
+                                        except Exception: 
+                                            pass
+                                    try:
                                         await rkn_processing.delete()
-                                    except Exception: 
+                                    except Exception:
                                         pass
                                 break
 
