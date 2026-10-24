@@ -40,17 +40,13 @@ from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup
 async def progress_for_wzgram(current, total, ud_type, message, start):
     now = time.time()
     diff = max(now - start, 0.001)
-
-    # Avoid division by zero if the total file size is invalid.
     if total <= 0:
         return
-
-    if round(diff % 5.00) == 0 or current == total:
+    if round(diff % 5.00) == 0 or current == total:        
         percentage = current * 100 / total
         speed = current / diff
         elapsed_time = round(diff) * 1000
-        remaining_bytes = max(0, total - current)
-        time_to_completion = round(remaining_bytes / speed) * 1000 if speed > 0 else 0
+        time_to_completion = round((total - current) / speed) * 1000 if speed > 0 else 0
         estimated_total_time = elapsed_time + time_to_completion
 
         elapsed_time = TimeFormatter(milliseconds=elapsed_time)
@@ -60,11 +56,11 @@ async def progress_for_wzgram(current, total, ud_type, message, start):
             ''.join(["▣" for i in range(math.floor(percentage / 5))]),
             ''.join(["▢" for i in range(20 - math.floor(percentage / 5))])
         )
-
+        
         # --- Dynamic Speed Icon Logic ---
         # Convert bytes/sec to MB/s for comparison
         speed_in_mb = speed / (1024 * 1024)
-
+        
         if speed_in_mb < 6:
             speed_icon = "🐢"
         elif speed_in_mb < 11:
@@ -97,18 +93,17 @@ async def progress_for_wzgram(current, total, ud_type, message, start):
             round(percentage, 2),        # {0} Status %
             humanbytes(current),         # {1} Completed
             humanbytes(total),           # {2} Total Size
-            speed_icon,                  # {3} Dynamic Speed Icon
+            speed_icon,                  # {3} Dynamic Icon
             estimated_total_time if estimated_total_time != '' else "0 s", # {4} ETA
             humanbytes(speed)            # {5} Speed Value
         )
         try:
             await message.edit(
-                text=f"{ud_type}\\n\\n{tmp}",               
+                text=f"{ud_type}\n\n{tmp}",               
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ 𝙲𝙰𝙽𝙲𝙴𝙻 ✖️", callback_data="close")]])                                               
             )
         except:
             pass
-
 
 def humanbytes(size):    
     if not size:
