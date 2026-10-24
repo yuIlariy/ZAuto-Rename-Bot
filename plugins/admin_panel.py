@@ -345,7 +345,7 @@ async def ban(c: Client, m: Message):
             ban_log_text += f"\n\nUser notification failed (user may have blocked the bot)."
 
         await digital_botz.ban_user(user_id, ban_duration, ban_reason)
-        await m.reply_text(ban_log_text, quote=True)
+        await m.reply_text(ban_log_text)
     except:
         traceback.print_exc()
         await m.reply_text(
@@ -375,7 +375,7 @@ async def unban(c: Client, m: Message):
             unban_log_text += f"\n\nUser notification failed!"
             
         await digital_botz.remove_ban(user_id)
-        await m.reply_text(unban_log_text, quote=True)
+        await m.reply_text(unban_log_text)
     except:
         traceback.print_exc()
         await m.reply_text(

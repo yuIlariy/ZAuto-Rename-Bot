@@ -382,7 +382,7 @@ async def download_worker(main_client, user_id):
                 rkn_processing = None
                 if user_id not in manager.silent_users:
                     try: 
-                        rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
+                        rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**")
                         await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                     except FloodWait as fw:
                         if fw.value > 15:
@@ -390,7 +390,7 @@ async def download_worker(main_client, user_id):
                         else:
                             await asyncio.sleep(fw.value)
                             try:
-                                rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**", quote=True)
+                                rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**")
                                 await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                             except: pass
                     except Exception: 

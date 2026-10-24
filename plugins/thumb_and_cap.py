@@ -45,7 +45,7 @@ async def send_safely(message, rkn_msg, text):
         except: 
             pass
         try: 
-            await message.reply_text(text, quote=True)
+            await message.reply_text(text)
         except: 
             pass
     except Exception:
