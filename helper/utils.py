@@ -67,8 +67,10 @@ async def progress_for_wzgram(current, total, ud_type, message, start):
             speed_icon = "🚀"
         elif speed_in_mb <= 16:
             speed_icon = "🛸"
-        else:
+        elif speed_in_mb < 50:
             speed_icon = "⚡"
+        else:
+            speed_icon = "🫨"
         # --------------------------------
 
         # --- Integrated Template (Ignores config.py) ---
