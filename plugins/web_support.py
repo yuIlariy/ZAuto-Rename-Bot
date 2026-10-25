@@ -15,7 +15,6 @@ import time
 import psutil
 import shutil
 import os
-from collections import deque
 from config import Config
 from plugins import __version__
 from helper.utils import humanbytes
@@ -32,22 +31,30 @@ last_time = time.time()
 last_up_speed = 0
 last_dl_speed = 0
 
-# --- 24-HOUR ROLLING RENAME TRACKER ---
-recent_renames = deque()
-
 # ⚠️ INVISIBLE HOOK: Intercept successful uploads without modifying file_rename.py
 original_update_limit = digital_botz.update_daily_limit
 
 async def hooked_update_limit(user_id, size):
-    recent_renames.append(time.time()) # Log the timestamp of the successful rename
+    await digital_botz.increment_total_renames() # <-- Now saves to DB
     return await original_update_limit(user_id, size) # Pass it back to the database normally
 
 # Override the database method in memory
 digital_botz.update_daily_limit = hooked_update_limit
 
+def format_short_number(num):
+    """Formats numbers to 1k, 1.8k, 2.39k formats."""
+    if num < 1000:
+        return str(num)
+    for unit in ['k', 'M', 'B']:
+        num /= 1000.0
+        if num < 1000:
+            formatted = f"{num:.2f}".rstrip('0').rstrip('.')
+            return f"{formatted}{unit}"
+    return str(num)
+
 async def get_status():
     """Fetches and formats system and bot statistics."""
-    global last_net_io, last_time, last_up_speed, last_dl_speed, recent_renames
+    global last_net_io, last_time, last_up_speed, last_dl_speed
     
     # Safely import directly from the advanced QueueManager in the Auto Renamer
     try:
@@ -92,12 +99,9 @@ async def get_status():
         last_net_io = current_net_io
         last_time = current_time
 
-    # --- 24-HOUR ROLLING WINDOW CALCULATION ---
-    # Continuously clean up timestamps older than exactly 86,400 seconds (24 hours)
-    while recent_renames and current_time - recent_renames[0] > 86400:
-        recent_renames.popleft()
-    
-    renames_24h = len(recent_renames)
+    # --- LIFETIME RENAME TRACKER ---
+    raw_total_renames = await digital_botz.get_total_renames()
+    formatted_total_renames = format_short_number(raw_total_renames)
 
     # Restore Lifetime Database Bandwidth
     net_stats = await digital_botz.get_network_stats()
@@ -138,7 +142,7 @@ async def get_status():
         "data_recv": data_recv,
         "up_speed": up_speed_str,
         "dl_speed": dl_speed_str,
-        "renames_24h": renames_24h,
+        "total_renames": formatted_total_renames,
         "total_workers": total_workers,
         "active_workers": active_workers,
         "free_workers": free_workers,
