@@ -32,14 +32,16 @@ last_up_speed = 0
 last_dl_speed = 0
 
 # ⚠️ INVISIBLE HOOK: Intercept successful uploads without modifying file_rename.py
-original_update_limit = digital_botz.update_daily_limit
+if not hasattr(digital_botz, "_limit_is_hooked"):
+    original_update_limit = digital_botz.update_daily_limit
 
-async def hooked_update_limit(user_id, size):
-    await digital_botz.increment_total_renames() # <-- Now saves to DB
-    return await original_update_limit(user_id, size) # Pass it back to the database normally
+    async def hooked_update_limit(user_id, size):
+        await digital_botz.increment_total_renames() # <-- Now saves to DB exactly once
+        return await original_update_limit(user_id, size) # Pass it back to the database normally
 
-# Override the database method in memory
-digital_botz.update_daily_limit = hooked_update_limit
+    # Override the database method in memory
+    digital_botz.update_daily_limit = hooked_update_limit
+    digital_botz._limit_is_hooked = True
 
 def format_short_number(num):
     """Formats numbers to 1k, 1.8k, 2.39k formats."""
