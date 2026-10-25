@@ -62,6 +62,7 @@ class BotStats(Document):
     total_sent: int = 0
     total_recv: int = 0
     last_updated: float = Field(default_factory=time.time)
+    total_renames: int = 0
 
     class Settings:
         name = "stats"
@@ -228,6 +229,17 @@ class Database:
         
     async def update_network_stats(self, sent_delta: int, recv_delta: int):
         await self.update_traffic(sent_delta, recv_delta)
+
+    async def increment_total_renames(self):
+        stats = await BotStats.get("bot_stats")
+        if not stats:
+            stats = BotStats()
+        stats.total_renames += 1
+        await stats.save()
+
+    async def get_total_renames(self):
+        stats = await BotStats.get("bot_stats")
+        return stats.total_renames if stats else 0
         
     # --- PREMIUM & LIMIT FUNCTIONS ---
     async def add_premium(self, user_id: int, days: int):
