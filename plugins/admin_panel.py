@@ -326,7 +326,6 @@ async def ban(c: Client, m: Message):
             f"`/ban user_id ban_duration ban_reason`\n\n"
             f"Eg: `/ban 1234567 28 You misused me.`\n"
             f"This will ban user with id `1234567` for `28` days for the reason `You misused me`.",
-            quote=True
         )
         return
 
@@ -350,7 +349,6 @@ async def ban(c: Client, m: Message):
         traceback.print_exc()
         await m.reply_text(
             f"Error occoured! Traceback given below\n\n`{traceback.format_exc()}`",
-            quote=True
         )
 
 @Client.on_message(filters.private & filters.command("unban") & filters.user(Config.ADMIN))
@@ -361,7 +359,6 @@ async def unban(c: Client, m: Message):
             f"Usage:\n\n`/unban user_id`\n\n"
             f"Eg: `/unban 1234567`\n"
             f"This will unban user with id `1234567`.",
-            quote=True
         )
         return
 
@@ -380,7 +377,6 @@ async def unban(c: Client, m: Message):
         traceback.print_exc()
         await m.reply_text(
             f"Error occurred! Traceback given below\n\n`{traceback.format_exc()}`",
-            quote=True
         )
 
 
