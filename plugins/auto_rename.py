@@ -59,6 +59,13 @@ class EnhancedAutoRenamer:
         if s_e_match:
             info['season'] = f"S{s_e_match.group(1).zfill(2)}"
             info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
+
+        # Pattern 1.5: Anime / Hyphen Format ([S01-1123], S1 - 1123)
+        if not info['episode']:
+            anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
+            if anime_match:
+                info['season'] = f"S{anime_match.group(1).zfill(2)}"
+                info['episode'] = f"E{anime_match.group(2).zfill(2)}"
         
         # Pattern 2: Verbose (Season 1 Episode 1)
         if not info['season']:
