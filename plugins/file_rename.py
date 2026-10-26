@@ -840,7 +840,7 @@ async def upload_worker(main_client, user_id):
         if state and state.get('status_msg'):
             if user_id not in manager.silent_users:
                 try: 
-                    await state['status_msg'].edit("✅ **Aʟʟ Fɪʟᴇꜱ ɪɴ Bᴀᴛᴄʜ Pʀᴏᴄᴇꜱꜱᴇᴅ!**")
+                    await state['status_msg'].edit("✅ **Bᴀᴛᴄʜ Pʀᴏᴄᴇꜱꜱɪɴɢ Cᴏᴍᴘʟᴇᴛᴇ!**)
                 except Exception: 
                     pass
             else:
