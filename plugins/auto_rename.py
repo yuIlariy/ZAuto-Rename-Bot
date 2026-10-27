@@ -136,6 +136,23 @@ class EnhancedAutoRenamer:
         if 'hdr' in clean_name.lower():
             info['hdr'] = 'HDR'
         
+        # ----------------------------------------------------
+        # CLEANUP: Prevent duplicate episode/season in {title}
+        # ----------------------------------------------------
+        if info['episode']:
+            ep_nums = re.findall(r'\d+', info['episode'])
+            for num in ep_nums:
+                info['title'] = re.sub(r'[\s\-]+' + num + r'$', '', info['title']).strip()
+                if num.startswith('0'):
+                    info['title'] = re.sub(r'[\s\-]+' + num.lstrip('0') + r'$', '', info['title']).strip()
+                    
+        if info['season']:
+            s_nums = re.findall(r'\d+', info['season'])
+            for num in s_nums:
+                info['title'] = re.sub(r'(?:[Ss]eason\s*|[Ss])' + num + r'$', '', info['title']).strip()
+                if num.startswith('0'):
+                    info['title'] = re.sub(r'(?:[Ss]eason\s*|[Ss])' + num.lstrip('0') + r'$', '', info['title']).strip()
+
         return info
     
     def _clean_title(self, title: str) -> str:
