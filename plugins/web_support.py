@@ -58,12 +58,13 @@ async def get_status():
     """Fetches and formats system and bot statistics."""
     global last_net_io, last_time, last_up_speed, last_dl_speed
     
-    # Safely import directly from the advanced QueueManager in the Auto Renamer
+    # Safely import directly from the advanced QueueManager and telemetry memory in the Auto Renamer
     try:
-        from plugins.file_rename import worker_loads, manager
+        from plugins.file_rename import worker_loads, manager, active_progress
     except ImportError:
         worker_loads = {}
         manager = None
+        active_progress = {}
     
     # 📜 Fetch real values from database
     real_total_users = await digital_botz.total_users_count()
@@ -118,9 +119,9 @@ async def get_status():
     active_workers = sum(1 for load in worker_loads.values() if load > 0)
     free_workers = max(0, healthy_workers - active_workers)
     
-    # Safely extract processing count from the Advanced QueueManager
-    current_active_tasks = 0
-    if manager:
+    # Safely extract processing count from active telemetry memory first, falling back to QueueManager
+    current_active_tasks = len(active_progress)
+    if current_active_tasks == 0 and manager:
         for dl_list in getattr(manager, 'active_downloads', {}).values():
             current_active_tasks += len(dl_list)
         for ul_list in getattr(manager, 'staging_pool', {}).values():
