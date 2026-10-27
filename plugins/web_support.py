@@ -58,7 +58,7 @@ async def get_status():
     """Fetches and formats system and bot statistics."""
     global last_net_io, last_time, last_up_speed, last_dl_speed
     
-    # Safely import directly from the advanced QueueManager and telemetry memory in the Auto Renamer
+    # Safely import directly from file_rename plugin
     try:
         from plugins.file_rename import worker_loads, manager, active_progress
     except ImportError:
@@ -70,19 +70,17 @@ async def get_status():
     real_total_users = await digital_botz.total_users_count()
     real_total_premium_users = await digital_botz.total_premium_users_count()
     
-    # 🪄 Apply Magic Boost (Matching your Auto-Renamer Telegram bot stats)
+    # 🪄 Apply Magic Boost
     total_users = real_total_users + 1009
     total_premium_users = real_total_premium_users + 64
     
     # --- UPTIME CALCULATIONS ---
-    # Bot Uptime
     bot_sec = time.time() - Config.BOT_UPTIME
     b_days, b_rem = divmod(bot_sec, 86400)
     b_hrs, b_rem = divmod(b_rem, 3600)
     b_mins, b_secs = divmod(b_rem, 60)
     bot_uptime = f"{int(b_days)}d {int(b_hrs)}h {int(b_mins)}m" if b_days > 0 else f"{int(b_hrs):02d}h{int(b_mins):02d}m{int(b_secs):02d}s"
 
-    # VPS System Uptime
     sys_sec = time.time() - psutil.boot_time()
     s_days, s_rem = divmod(sys_sec, 86400)
     s_hrs, s_rem = divmod(s_rem, 3600)
@@ -94,7 +92,6 @@ async def get_status():
     current_net_io = psutil.net_io_counters()
     current_time = time.time()
     
-    # --- LIVE SPEEDS (Updates every 1 second) ---
     time_delta = current_time - last_time
     if time_delta >= 1.0: 
         last_up_speed = (current_net_io.bytes_sent - last_net_io.bytes_sent) / time_delta
@@ -102,11 +99,9 @@ async def get_status():
         last_net_io = current_net_io
         last_time = current_time
 
-    # --- LIFETIME RENAME TRACKER ---
     raw_total_renames = await digital_botz.get_total_renames()
     formatted_total_renames = format_short_number(raw_total_renames)
 
-    # Restore Lifetime Database Bandwidth
     net_stats = await digital_botz.get_network_stats()
     data_sent = humanbytes(net_stats.get('sent', 0))
     data_recv = humanbytes(net_stats.get('recv', 0))
@@ -119,7 +114,7 @@ async def get_status():
     active_workers = sum(1 for load in worker_loads.values() if load > 0)
     free_workers = max(0, healthy_workers - active_workers)
     
-    # Safely extract processing count from active telemetry memory first, falling back to QueueManager
+    # 🎯 Count active tasks directly from active_progress memory
     current_active_tasks = len(active_progress)
     if current_active_tasks == 0 and manager:
         for dl_list in getattr(manager, 'active_downloads', {}).values():
@@ -127,7 +122,6 @@ async def get_status():
         for ul_list in getattr(manager, 'staging_pool', {}).values():
             current_active_tasks += len(ul_list)
     
-    # Safely format speed strings
     up_speed_str = f"{humanbytes(last_up_speed)}/s" if last_up_speed > 0 else "0 B/s"
     dl_speed_str = f"{humanbytes(last_dl_speed)}/s" if last_dl_speed > 0 else "0 B/s"
     
@@ -179,12 +173,8 @@ async def api_status_handler(request):
     status_data = await get_status()
     return web.json_response(status_data)
 
-# ==========================================
-# --- LIVE TELEMETRY ENDPOINT ---
-# ==========================================
 @DigitalAutoRenameBot.get("/api/queue")
 async def api_queue_handler(request):
-    """Exposes live split data for Downloads, Uploads, and Pending Tasks for Auto Renamer."""
     try:
         from plugins.file_rename import active_progress, manager
     except ImportError:
@@ -195,14 +185,12 @@ async def api_queue_handler(request):
         uploading = []
         pending = []
         
-        # Pull active progress from memory
         for tid, prog in active_progress.items():
             if prog["status"] == "Downloading":
                 downloading.append(prog)
             else:
                 uploading.append(prog)
                 
-        # Pull pending items from the manager's user_tasks
         if manager and hasattr(manager, 'user_tasks'):
             for u_tasks in manager.user_tasks.values():
                 for item in u_tasks:
