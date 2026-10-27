@@ -54,20 +54,21 @@ class EnhancedAutoRenamer:
         
         # 2. Season and Episode extraction
         
-        # Pattern 1: Strict (S01E01, S1E1)
-        s_e_match = re.search(r'[Ss](\d{1,2})\s*[EePp]?(\d{1,4})', clean_name)
-        if s_e_match:
-            info['season'] = f"S{s_e_match.group(1).zfill(2)}"
-            info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
+        # Pattern 1: Anime / Hyphen Format ([S01-1123], S1 - 1123)
+        anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
+        if anime_match:
+            info['season'] = f"S{anime_match.group(1).zfill(2)}"
+            info['episode'] = f"E{anime_match.group(2).zfill(2)}"
 
-        # Pattern 1.5: Anime / Hyphen Format ([S01-1123], S1 - 1123)
+        # Pattern 2: Strict (S01E01, S1E1, S01 01)
         if not info['episode']:
-            anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
-            if anime_match:
-                info['season'] = f"S{anime_match.group(1).zfill(2)}"
-                info['episode'] = f"E{anime_match.group(2).zfill(2)}"
+            # Mandates an E, P, or a Space between the numbers to prevent greedy splitting
+            s_e_match = re.search(r'[Ss](\d{1,2})(?:[Ee][Pp]?|\s+[Ee]?[Pp]?)\s*(\d{1,4})', clean_name)
+            if s_e_match:
+                info['season'] = f"S{s_e_match.group(1).zfill(2)}"
+                info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
         
-        # Pattern 2: Verbose (Season 1 Episode 1)
+        # Pattern 3: Verbose (Season 1 Episode 1)
         if not info['season']:
             season_match = re.search(r'[Ss]eason\s*(\d{1,2})', clean_name, re.IGNORECASE)
             episode_match = re.search(r'[Ee]pisode\s*(\d{1,4})', clean_name, re.IGNORECASE)
@@ -76,7 +77,7 @@ class EnhancedAutoRenamer:
             if episode_match:
                 info['episode'] = f"E{episode_match.group(1).zfill(2)}"
 
-        # Pattern 3: Loose Sequence (Show - 01, Show Ep 01, [01])
+        # Pattern 4: Loose Sequence (Show - 01, Show Ep 01, [01])
         if not info['episode']:
             # Look for hyphens or "Ep" followed by number
             loose_match = re.search(r'(?:\s-|Ep|E|Episode|^)\s*(\d{1,4})(?=\s|$|\.)', clean_name, re.IGNORECASE)
