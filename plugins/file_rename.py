@@ -372,6 +372,17 @@ async def rename_start(client, message):
 
 
 async def download_worker(main_client, user_id):
+    # DYNAMIC BATCH SETTLE: Ensure all forwarded files arrive and sort correctly before starting
+    last_count = -1
+    while True:
+        lock = await manager.get_lock(user_id)
+        async with lock:
+            current_count = len(manager.user_tasks.get(user_id, []))
+        if current_count > 0 and current_count == last_count:
+            break
+        last_count = current_count
+        await asyncio.sleep(2.0)
+
     try:
         while True:
             lock = await manager.get_lock(user_id)
