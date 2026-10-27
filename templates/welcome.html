@@ -17,6 +17,7 @@
             --accent-blue: #3b82f6;
             --accent-purple: #8b5cf6;
             --success: #10b981;
+            --warning: #f59e0b;
         }
 
         * {
@@ -268,6 +269,98 @@
             color: var(--text-primary);
         }
 
+        /* --- LIVE TELEMETRY TERMINAL UI --- */
+        .queue-terminal {
+            background-color: #040814;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .q-section-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .q-item {
+            background: rgba(255,255,255, 0.03);
+            border: 1px solid rgba(255,255,255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .q-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        .q-filename {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%;
+            color: var(--success);
+        }
+        
+        .q-filename.up {
+            color: var(--accent-purple);
+        }
+
+        .q-pct {
+            font-weight: bold;
+        }
+
+        .q-bar-bg {
+            height: 4px;
+            background: var(--bg-main);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .q-bar-fill {
+            height: 100%;
+            background: var(--success);
+            transition: width 0.3s ease;
+        }
+        
+        .q-bar-fill.up {
+            background: var(--accent-purple);
+        }
+
+        .q-stats {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .queue-empty {
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+            padding: 2rem 0;
+        }
+
         /* Progress Bars */
         .meter {
             margin-top: 1rem;
@@ -454,13 +547,11 @@
         <!-- Processing & Traffic Card -->
         <div class="card card-full">
             <div class="traffic-layout">
-                <!-- Processing Block -->
                 <div class="processing-block">
                     <div class="stat-label">PROCESSING</div>
                     <div class="stat-value" id="val-active_tasks">{{active_tasks}}</div>
                 </div>
 
-                <!-- Slim Speed Sub-Card -->
                 <div class="speed-subcard">
                     <div class="speed-header">⚡ SPEED</div>
                     <div class="speed-grid">
@@ -488,21 +579,35 @@
             </div>
         </div>
 
+        <!-- LIVE TELEMETRY CARD -->
+        <div class="card card-full">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-satellite-dish"></i> Live Telemetry</span>
+            </div>
+            <div class="queue-terminal" id="queue-terminal">
+                <div class="queue-empty">⏳ Waiting for telemetry data...</div>
+            </div>
+        </div>
+
         <!-- Fleet Node Card -->
         <div class="card card-full">
             <div class="card-header">
                 <span class="card-title"><i class="fas fa-network-wired"></i> Fleet Architecture</span>
             </div>
-            <div class="stat-grid grid-stack-mobile" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="stat-grid grid-stack-mobile" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="stat-block">
-                    <div class="stat-label">Total Nodes Configured</div>
+                    <div class="stat-label">Total Nodes</div>
                     <div class="stat-value" id="val-total_workers">{{total_workers}}</div>
                 </div>
-                <div class="stat-block" style="border-left-color: var(--accent-blue);">
+                <div class="stat-block" style="border-left-color: var(--success);">
+                    <div class="stat-label">Healthy Nodes</div>
+                    <div class="stat-value" id="val-healthy_workers" style="color: var(--success);">{{healthy_workers}}</div>
+                </div>
+                <div class="stat-block" style="border-left-color: var(--warning);">
                     <div class="stat-label">Active Workers</div>
                     <div class="stat-value" id="val-active_workers">{{active_workers}}</div>
                 </div>
-                <div class="stat-block" style="border-left-color: var(--success);">
+                <div class="stat-block" style="border-left-color: var(--accent-blue);">
                     <div class="stat-label">Free Workers</div>
                     <div class="stat-value" id="val-free_workers">{{free_workers}}</div>
                 </div>
@@ -587,7 +692,7 @@
             setTimeout(() => loader.style.display = 'none', 500);
         });
 
-        // Fetch live data every 1 second (1000ms)
+        // 1. Fetch system stats
         setInterval(async () => {
             try {
                 const response = await fetch('/api/status');
@@ -595,41 +700,103 @@
                 
                 const data = await response.json();
                 
-                // Top Cards
                 document.getElementById('val-bot_status').innerText = data.bot_status;
                 document.getElementById('val-bot_uptime').innerText = data.bot_uptime;
                 document.getElementById('val-total_users').innerText = data.total_users;
                 document.getElementById('val-premium_users').innerText = data.premium_users;
-                
-                // Processing & Traffic
                 document.getElementById('val-active_tasks').innerText = data.active_tasks;
                 document.getElementById('val-up_speed').innerText = data.up_speed;
                 document.getElementById('val-dl_speed').innerText = data.dl_speed;
                 document.getElementById('val-total_renames').innerText = data.total_renames;
-
-                // Fleet
                 document.getElementById('val-total_workers').innerText = data.total_workers;
+                document.getElementById('val-healthy_workers').innerText = data.healthy_workers;
                 document.getElementById('val-active_workers').innerText = data.active_workers;
                 document.getElementById('val-free_workers').innerText = data.free_workers;
-
-                // Storage & Network
                 document.getElementById('val-system_uptime').innerText = data.system_uptime;
                 document.getElementById('val-data_sent').innerText = data.data_sent;
                 document.getElementById('val-data_recv').innerText = data.data_recv;
                 document.getElementById('val-free_disk').innerText = data.free_disk;
                 document.getElementById('val-used_disk').innerText = data.used_disk;
-
-                // Progress Bars
                 document.getElementById('val-cpu_usage').innerText = data.cpu_usage + '%';
                 document.getElementById('bar-cpu_usage').style.width = data.cpu_usage + '%';
-                
                 document.getElementById('val-ram_usage').innerText = data.ram_usage + '%';
                 document.getElementById('bar-ram_usage').style.width = data.ram_usage + '%';
-
             } catch (error) {
-                console.error("Connection lost or API error:", error);
+                console.error("Status API error:", error);
             }
-        }, 1000); // 1000 milliseconds = 1 second
+        }, 1000); 
+
+        // 2. Fetch Live Telemetry Progress
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/queue');
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                const term = document.getElementById('queue-terminal');
+                
+                if (data.success) {
+                    if (data.downloading.length === 0 && data.uploading.length === 0 && data.pending.length === 0) {
+                        term.innerHTML = '<div class="queue-empty">⏳ No active tasks in telemetry.</div>';
+                        return;
+                    }
+                    
+                    let html = '';
+
+                    // UPLOADING SECTION
+                    if (data.uploading.length > 0) {
+                        html += `<div class="q-section-title"><i class="fas fa-arrow-up" style="color: var(--accent-purple);"></i> Uploading (${data.uploading.length})</div>`;
+                        data.uploading.forEach(t => {
+                            html += `
+                            <div class="q-item">
+                                <div class="q-info">
+                                    <span class="q-filename up">${t.filename}</span> 
+                                    <span class="q-pct">${t.percentage}%</span>
+                                </div>
+                                <div class="q-bar-bg"><div class="q-bar-fill up" style="width: ${t.percentage}%;"></div></div>
+                                <div class="q-stats"><span>${t.current} / ${t.total}</span> <span>${t.speed}</span></div>
+                            </div>`;
+                        });
+                    }
+
+                    // DOWNLOADING SECTION
+                    if (data.downloading.length > 0) {
+                        if (html !== '') html += `<hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.05); margin: 10px 0;">`;
+                        html += `<div class="q-section-title"><i class="fas fa-arrow-down" style="color: var(--success);"></i> Downloading (${data.downloading.length})</div>`;
+                        data.downloading.forEach(t => {
+                            html += `
+                            <div class="q-item">
+                                <div class="q-info">
+                                    <span class="q-filename">${t.filename}</span> 
+                                    <span class="q-pct">${t.percentage}%</span>
+                                </div>
+                                <div class="q-bar-bg"><div class="q-bar-fill" style="width: ${t.percentage}%;"></div></div>
+                                <div class="q-stats"><span>${t.current} / ${t.total}</span> <span>${t.speed}</span></div>
+                            </div>`;
+                        });
+                    }
+
+                    // PENDING SECTION
+                    if (data.pending.length > 0) {
+                        if (html !== '') html += `<hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.05); margin: 10px 0;">`;
+                        html += `<div class="q-section-title"><i class="fas fa-clock" style="color: var(--warning);"></i> Pending in Queue (${data.pending.length})</div>`;
+                        data.pending.forEach(t => {
+                            html += `
+                            <div class="q-item" style="opacity: 0.7;">
+                                <div class="q-info">
+                                    <span class="q-filename" style="color: var(--text-secondary);">${t.filename}</span> 
+                                    <span class="q-pct" style="color: var(--warning);">Waiting</span>
+                                </div>
+                            </div>`;
+                        });
+                    }
+
+                    term.innerHTML = html;
+                }
+            } catch (error) {
+                console.error("Telemetry API error:", error);
+            }
+        }, 2000); 
     </script>
 </body>
 </html>
