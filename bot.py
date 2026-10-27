@@ -141,6 +141,29 @@ class DigitalAutoRenameBot(Client):
 digital_instance = DigitalAutoRenameBot()
 
 # ==========================================
+# --- WORKER FLEET HEALTH CHECKER ---
+# ==========================================
+async def worker_health_checker():
+    """Background task to ping all worker clients and update their health status."""
+    while True:
+        try:
+            for wc in getattr(Config, "WORKER_CLIENTS", []):
+                try:
+                    await wc.get_me()
+                    wc.is_healthy = True
+                except errors.FloodWait:
+                    wc.is_healthy = False
+                    print(f"⚠️ Worker {wc.name} is currently restricted (FloodWait). Sidelining...")
+                except Exception as e:
+                    wc.is_healthy = False
+                    print(f"⚠️ Worker {wc.name} connection error: {e}. Sidelining...")
+        except Exception as e:
+            print(f"Health Checker Loop Error: {e}")
+        
+        # Ping the fleet every 5 minutes (300 seconds)
+        await asyncio.sleep(300)
+
+# ==========================================
 # --- GLOBAL MIDNIGHT RESET TASK ---
 # ==========================================
 async def daily_reset_task():
@@ -227,6 +250,7 @@ def main():
                     bot_token=token.strip(), 
                     sleep_threshold=5
                 )
+                wc.is_healthy = True # ADDED: Default healthy on boot
                 Config.WORKER_CLIENTS.append(wc)
                 await wc.start()
                 print(f"✅ Worker {i+1} Started")
@@ -244,6 +268,7 @@ def main():
         # --- START BACKGROUND TASKS ---
         asyncio.create_task(premium_expiry_notifier(digital_instance))
         asyncio.create_task(daily_reset_task())
+        asyncio.create_task(worker_health_checker()) # ADDED: Start Health Checker Loop
         # ------------------------------
 
         # Idle mode start karo
