@@ -45,34 +45,6 @@ renamer = EnhancedAutoRenamer()
 upload_lock = asyncio.Lock()
 
 # ==========================================
-# --- LIVE PROGRESS MEMORY FOR TELEMETRY ---
-# ==========================================
-active_progress = {}
-
-async def custom_progress(current, total, text, message, start, task_id, filename):
-    """Always updates web telemetry and optionally updates Telegram message if message exists."""
-    percentage = round((current / total) * 100, 2) if total else 0
-    diff = time.time() - start
-    speed = current / diff if diff > 0 else 0
-    
-    # Always update web telemetry memory independently of Telegram message state
-    active_progress[str(task_id)] = {
-        "filename": filename,
-        "status": "Downloading" if "Down" in text else "Uploading",
-        "percentage": percentage,
-        "speed": f"{humanbytes(speed)}/s" if speed > 0 else "0 B/s",
-        "current": humanbytes(current),
-        "total": humanbytes(total)
-    }
-    
-    # Update Telegram UI only if message is provided
-    if message:
-        try:
-            await progress_for_wzgram(current, total, text, message, start)
-        except Exception:
-            pass
-
-# ==========================================
 # --- SEQUENCE SORTER ---
 # ==========================================
 def get_sort_key(item):
@@ -99,22 +71,18 @@ def get_least_busy_worker(main_client):
     if not workers:
         return main_client
     
-    healthy_workers = [w for w in workers if getattr(w, "is_healthy", True)]
-    if not healthy_workers:
-        return main_client
-        
-    for w in healthy_workers:
+    for w in workers:
         if w not in worker_loads:
             worker_loads[w] = 0
             
-    min_load = min(worker_loads[w] for w in healthy_workers)
+    min_load = min(worker_loads[w] for w in workers)
     
-    for i in range(len(healthy_workers)):
-        check_index = (last_worker_index + 1 + i) % len(healthy_workers)
-        worker = healthy_workers[check_index]
+    for i in range(len(workers)):
+        check_index = (last_worker_index + 1 + i) % len(workers)
+        worker = workers[check_index]
         
         if worker_loads[worker] == min_load:
-            last_worker_index = workers.index(worker)
+            last_worker_index = check_index
             return worker
             
     return main_client
@@ -465,6 +433,11 @@ async def download_worker(main_client, user_id):
                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                 
                 while True:
+                    if user_id in manager.silent_users and rkn_processing:
+                        try: await rkn_processing.delete()
+                        except: pass
+                        rkn_processing = None
+
                     try:
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
@@ -477,13 +450,12 @@ async def download_worker(main_client, user_id):
                         else:
                             target_msg = message
 
-                        dl_start_time = time.time()
                         dl_path = await asyncio.wait_for(
                             worker_client.download_media(
                                 message=target_msg,
                                 file_name=file_path,
-                                progress=custom_progress,
-                                progress_args=(DOWNLOAD_TEXT, rkn_processing if (user_id not in manager.silent_users) else None, dl_start_time, task_id, new_filename)
+                                progress=progress_for_wzgram if (rkn_processing and user_id not in manager.silent_users) else None,
+                                progress_args=(DOWNLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
                             ),
                             timeout=7200
                         )
@@ -530,11 +502,12 @@ async def download_worker(main_client, user_id):
                             
                         wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
                         
-                        if isinstance(e, FloodWait):
-                            if worker_client != main_client:
-                                worker_client.is_healthy = False
-                            if e.value > 15:
-                                manager.silent_users.add(user_id)
+                        if isinstance(e, FloodWait) and e.value > 15:
+                            manager.silent_users.add(user_id)
+                            if rkn_processing:
+                                try: await rkn_processing.delete()
+                                except: pass
+                                rkn_processing = None
 
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
@@ -587,8 +560,6 @@ async def download_worker(main_client, user_id):
                         
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
-                if str(task_id) in active_progress:
-                    del active_progress[str(task_id)]
                 await safe_delete_task(task_id, user_id, main_client)
                 try: 
                     shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
@@ -687,6 +658,11 @@ async def upload_worker(main_client, user_id):
                     workers_list = getattr(Config, "WORKER_CLIENTS", [])
                     
                     while True:
+                        if user_id in manager.silent_users and rkn_processing:
+                            try: await rkn_processing.delete()
+                            except: pass
+                            rkn_processing = None
+
                         try:
                             async def perform_upload():
                                 if not uploader.is_connected:
@@ -696,7 +672,7 @@ async def upload_worker(main_client, user_id):
                                 if not is_main_bot:
                                     filw, error = await upload_files(
                                         uploader, Config.LOG_CHANNEL, data['upload_type'], data['file_path'], 
-                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id']
+                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename']
                                     )
                                     if not error and filw:
                                         await asyncio.sleep(1.5)
@@ -726,9 +702,8 @@ async def upload_worker(main_client, user_id):
                                                 pass
                                     return error
                                 else:
-                                    up_start_time = time.time()
-                                    active_prog = custom_progress
-                                    active_args = (UPLOAD_TEXT, rkn_processing if (user_id not in manager.silent_users) else None, up_start_time, data['task_id'], data['new_filename'])
+                                    active_prog = progress_for_wzgram if (rkn_processing and user_id not in manager.silent_users) else None
+                                    active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if (rkn_processing and user_id not in manager.silent_users) else ()
 
                                     if data['upload_type'] == "document":
                                         await asyncio.wait_for(main_client.send_document(user_id, document=data['file_path'], file_name=data['new_filename'], thumb=data['ph_path'], caption=data['caption'], progress=active_prog, progress_args=active_args), timeout=7200)
@@ -827,15 +802,12 @@ async def upload_worker(main_client, user_id):
                             raise Exception("MessageIdInvalid")
                             
                         except Exception as perform_e:
-                            if isinstance(perform_e, FloodWait):
-                                if uploader != app and not is_main_bot:
-                                    uploader.is_healthy = False
-                                if perform_e.value > 15:
-                                    manager.silent_users.add(user_id)
-                                    if rkn_processing:
-                                        try: await rkn_processing.delete()
-                                        except: pass
-                                        rkn_processing = None
+                            if isinstance(perform_e, FloodWait) and perform_e.value > 15:
+                                manager.silent_users.add(user_id)
+                                if rkn_processing:
+                                    try: await rkn_processing.delete()
+                                    except: pass
+                                    rkn_processing = None
                             print(f"Upload loop crash: {perform_e}")
                             break
 
@@ -849,9 +821,6 @@ async def upload_worker(main_client, user_id):
                         await manager.update_status_msg(user_id)
                         
                 finally:
-                    if str(data['task_id']) in active_progress:
-                        del active_progress[str(data['task_id'])]
-
                     if uploader != main_client and uploader != app:
                         worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
 
@@ -886,11 +855,10 @@ async def upload_worker(main_client, user_id):
         manager.cleanup(user_id)
 
 
-async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename, task_id):
+async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename):
     try:
-        up_start_time = time.time()
-        active_prog = custom_progress
-        active_args = (UPLOAD_TEXT, rkn_processing, up_start_time, task_id, new_filename)
+        active_prog = progress_for_wzgram if rkn_processing else None
+        active_args = (UPLOAD_TEXT, rkn_processing, time.time()) if rkn_processing else ()
 
         if upload_type == "document":
             filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=active_prog, progress_args=active_args), timeout=7200)
