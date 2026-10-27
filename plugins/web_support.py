@@ -111,9 +111,12 @@ async def get_status():
     data_recv = humanbytes(net_stats.get('recv', 0))
 
     # --- FLEET NODE & ACTIVE TASKS MONITORING ---
-    total_workers = len(getattr(Config, "WORKER_CLIENTS", []))
+    workers = getattr(Config, "WORKER_CLIENTS", [])
+    total_workers = len(workers)
+    healthy_workers = sum(1 for w in workers if getattr(w, "is_healthy", True))
+    
     active_workers = sum(1 for load in worker_loads.values() if load > 0)
-    free_workers = max(0, total_workers - active_workers)
+    free_workers = max(0, healthy_workers - active_workers)
     
     # Safely extract processing count from the Advanced QueueManager
     current_active_tasks = 0
@@ -146,6 +149,7 @@ async def get_status():
         "dl_speed": dl_speed_str,
         "total_renames": formatted_total_renames,
         "total_workers": total_workers,
+        "healthy_workers": healthy_workers,
         "active_workers": active_workers,
         "free_workers": free_workers,
         "active_tasks": current_active_tasks,
@@ -173,6 +177,49 @@ async def root_route_handler(request):
 async def api_status_handler(request):
     status_data = await get_status()
     return web.json_response(status_data)
+
+# ==========================================
+# --- LIVE TELEMETRY ENDPOINT ---
+# ==========================================
+@DigitalAutoRenameBot.get("/api/queue")
+async def api_queue_handler(request):
+    """Exposes live split data for Downloads, Uploads, and Pending Tasks for Auto Renamer."""
+    try:
+        from plugins.file_rename import active_progress, manager
+    except ImportError:
+        return web.json_response({"error": "Cannot load required modules"})
+        
+    try:
+        downloading = []
+        uploading = []
+        pending = []
+        
+        # Pull active progress from memory
+        for tid, prog in active_progress.items():
+            if prog["status"] == "Downloading":
+                downloading.append(prog)
+            else:
+                uploading.append(prog)
+                
+        # Pull pending items from the manager's user_tasks
+        if manager and hasattr(manager, 'user_tasks'):
+            for u_tasks in manager.user_tasks.values():
+                for item in u_tasks:
+                    msg = item.get('msg')
+                    if msg and msg.media:
+                        rkn_file = getattr(msg, msg.media.value, None)
+                        fname = getattr(rkn_file, 'file_name', None) or "Unknown_File"
+                        pending.append({"filename": fname, "status": "Pending"})
+                
+        return web.json_response({
+            "success": True,
+            "downloading": downloading,
+            "uploading": uploading,
+            "pending": pending
+        })
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)})
+
 
 async def web_server():
     web_app = web.Application(client_max_size=30000000)
