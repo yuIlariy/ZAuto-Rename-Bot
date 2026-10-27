@@ -94,17 +94,12 @@ class EnhancedAutoRenamer:
             if found_ep and found_ep != info['year']:
                 info['episode'] = f"E{found_ep.zfill(2)}"
 
-        # 3. Title extraction (Strip leading tags/brackets like [S1-1168] first)
-        title_raw = filename.replace('_', ' ').replace('.', ' ')
-        title_raw = re.sub(r'^\s*\[[^\]]+\]\s*', '', title_raw)
-        title_raw = re.sub(r'^\s*\((?:[^)]+)\)\s*', '', title_raw)
-
-        title_match = re.search(r'^([A-Za-z0-9\s\.\-\']+?)(?=\s*[\(\[]?\d{4}[\)\]]?|\s*S\d|\s*E\d|\s*\-\s*\d|\s*\d{3,4}[pP]|\s*(?:4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay))', title_raw, re.IGNORECASE)
+        # 3. Title extraction
+        title_match = re.search(r'^([A-Za-z0-9\s\.\-\']+?)(?=\s*[\(\[]?\d{4}[\)\]]?|\s*S\d|\s*E\d|\s*\-\s*\d|\s*\d{3,4}[pP]|\s*(?:4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay))', filename.replace('.', ' ').replace('_', ' '), re.IGNORECASE)
         if title_match:
             info['title'] = self._clean_title(title_match.group(1))
         else:
-            fallback = re.sub(r'\[.*?\]', '', info['original_name']).strip()
-            info['title'] = self._clean_title(fallback)
+            info['title'] = self._clean_title(info['original_name'])
         
         # 4. Quality extraction
         quality_match = re.search(r'(\d{3,4}p|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
@@ -141,21 +136,6 @@ class EnhancedAutoRenamer:
         if 'hdr' in clean_name.lower():
             info['hdr'] = 'HDR'
         
-        # 10. Final cleanup: Purge any leaked episode/season digits from the title text
-        if info['episode']:
-            ep_nums = re.findall(r'\d+', info['episode'])
-            for num in ep_nums:
-                info['title'] = re.sub(r'[\s\-]+' + num + r'$', '', info['title']).strip()
-                if num.startswith('0'):
-                    info['title'] = re.sub(r'[\s\-]+' + num.lstrip('0') + r'$', '', info['title']).strip()
-
-        if info['season']:
-            s_nums = re.findall(r'\d+', info['season'])
-            for num in s_nums:
-                info['title'] = re.sub(r'(?:[Ss]eason\s*|[Ss])' + num + r'$', '', info['title']).strip()
-                if num.startswith('0'):
-                    info['title'] = re.sub(r'(?:[Ss]eason\s*|[Ss])' + num.lstrip('0') + r'$', '', info['title']).strip()
-
         return info
     
     def _clean_title(self, title: str) -> str:
