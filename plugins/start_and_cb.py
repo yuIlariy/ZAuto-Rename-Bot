@@ -69,7 +69,7 @@ PREMIUM_TEXT = """**💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ**
 Upgrade to Premium to enjoy high-speed renaming without limits!
 
 **Available Plans:**
-• 🗓️ **1 Month:** 1 USDT
+• 🗓️ **1 Month:** 1.5 USDT
 • 🗓️ **3 Months:** 2.5 USDT
 • 🗓️ **6 Months:** 4.5 USDT
 • ♾️ **Lifetime:** 10 USDT
@@ -81,7 +81,7 @@ Upgrade to Premium to enjoy high-speed renaming without limits!
 ✅ 24/7 Support
 
 **Payment Method:**
-Contact Admin @xspes to pay via **Crypto (USDT/BTC/ETH/LTC)**.
+Click the **Buy Premium** button below to pay via **Crypto (USDT/BTC/ETH/LTC)**.
 Send your User ID after payment!"""
 
 # --- COMMANDS ---
@@ -151,7 +151,7 @@ async def myplan_cmd(client, message):
 
 @Client.on_message(filters.private & filters.command(["plans", "upgrade"]))
 async def plans_cmd(client, message):
-    btn = [[InlineKeyboardButton("💳 Pᴀʏ Vɪᴀ Cʀʏᴘᴛᴏ (Aᴅᴍɪɴ)", url="https://t.me/xspes")],
+    btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266)],
            [InlineKeyboardButton("✖️ Cʟᴏꜱᴇ", callback_data="close")]]
     await message.reply_text(PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
@@ -220,7 +220,7 @@ async def cb_handler(client, query: CallbackQuery):
             disable_web_page_preview = True, reply_markup=InlineKeyboardMarkup(about_button))    
 
     elif data == "premium_plans":
-        btn = [[InlineKeyboardButton("💳 Pᴀʏ Vɪᴀ Cʀʏᴘᴛᴏ", url="https://t.me/xspes")],
+        btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266)],
                [InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="start")]]
         await query.message.edit_text(text=PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
