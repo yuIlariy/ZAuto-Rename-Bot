@@ -48,20 +48,9 @@ upload_lock = asyncio.Lock()
 # --- LIVE PROGRESS MEMORY FOR TELEMETRY ---
 # ==========================================
 active_progress = {}
-last_db_check = {}
 
 async def custom_progress(current, total, text, message, start, task_id, filename):
     """Intercepts progress to update the live web dashboard while maintaining Telegram updates."""
-    # LIVE CANCEL MONITOR: Check DB every 3 seconds to see if user hit the Cancel button
-    now = time.time()
-    if now - last_db_check.get(str(task_id), 0) > 3:
-        task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-        if not task:
-            if str(task_id) in last_db_check:
-                del last_db_check[str(task_id)]
-            raise Exception("TASK_CANCELLED")
-        last_db_check[str(task_id)] = now
-
     percentage = round((current / total) * 100, 2) if total else 0
     diff = time.time() - start
     speed = current / diff if diff > 0 else 0
@@ -136,12 +125,14 @@ async def safe_delete_task(task_id, user_id, client):
     try:
         raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
         if raw_task:
+            # Delete processing message from user's chat
             if raw_task.get("processing_msg_id", 0) != 0:
                 try:
                     await client.delete_messages(user_id, raw_task["processing_msg_id"])
                 except Exception:
                     pass
             
+            # Delete log message from log channel
             if raw_task.get("log_msg_id", 0) != 0:
                 try:
                     await client.delete_messages(Config.LOG_CHANNEL, raw_task["log_msg_id"])
@@ -434,15 +425,6 @@ async def download_worker(main_client, user_id):
             
             message = item['msg']
             task_id = item['task_id']
-
-            task_record = await digital_botz.db["tasks"].find_one({"_id": task_id})
-            if not task_record:
-                async with lock:
-                    if user_id in manager.active_downloads and sort_key in manager.active_downloads[user_id]:
-                        manager.active_downloads[user_id].remove(sort_key)
-                if user_id in manager.upload_events:
-                    manager.upload_events[user_id].set()
-                continue
             
             worker_client = get_least_busy_worker(main_client)
             current_worker = worker_client
@@ -559,17 +541,15 @@ async def download_worker(main_client, user_id):
                             log_msg_down = None
                             
                         if main_client.premium and main_client.uploadlimit:
-                            await digital_botz.increment_used_limit(user_id, -rkn_file.file_size)
+                            await digital_botz.increment_used_limit(user_id, -media.file_size)
                         await safe_delete_task(task_id, user_id, main_client)
                         raise Exception("MessageIdInvalid")
                         
                     except Exception as e:
-                        if str(e) == "TASK_CANCELLED":
-                            if worker_client != main_client and log_msg_down:
-                                try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
-                                except Exception: pass
-                                log_msg_down = None
-                            raise Exception("TASK_CANCELLED")
+                        if worker_client != main_client and log_msg_down:
+                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
+                            except Exception: pass
+                            log_msg_down = None
                             
                         wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
                         
@@ -640,9 +620,8 @@ async def download_worker(main_client, user_id):
                 
                 state = manager.batch_state.get(user_id)
                 if state:
-                    if str(inner_e) != "TASK_CANCELLED":
-                        state['processed'] += 1
-                        await manager.update_status_msg(user_id)
+                    state['processed'] += 1
+                    await manager.update_status_msg(user_id)
                 continue
             
             finally:
@@ -716,19 +695,6 @@ async def upload_worker(main_client, user_id):
                             pass
                     break 
                     
-                task_record = await digital_botz.db["tasks"].find_one({"_id": data['task_id']})
-                if not task_record:
-                    if str(data['task_id']) in active_progress:
-                        del active_progress[str(data['task_id'])]
-                    await remove_path(data['ph_path'], data['file_path'])
-                    try: 
-                        shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
-                    except Exception: 
-                        pass
-                    if user_id in manager.upload_events:
-                        manager.upload_events[user_id].set()
-                    continue
-
                 rkn_processing = data.get('rkn_processing')
                 if user_id in manager.silent_users:
                     rkn_processing = None
@@ -822,8 +788,6 @@ async def upload_worker(main_client, user_id):
                                 error = await perform_upload()
 
                             if error:
-                                if error == "TASK_CANCELLED":
-                                    raise Exception("TASK_CANCELLED")
                                 if str(error).startswith("FLOODWAIT:"):
                                     try: wait_time = int(str(error).split(":")[1])
                                     except: wait_time = 5
@@ -886,8 +850,6 @@ async def upload_worker(main_client, user_id):
                             raise Exception("MessageIdInvalid")
                             
                         except Exception as perform_e:
-                            if str(perform_e) == "TASK_CANCELLED":
-                                raise Exception("TASK_CANCELLED")
                             if isinstance(perform_e, FloodWait):
                                 if uploader != app and not is_main_bot:
                                     uploader.is_healthy = False
@@ -906,9 +868,8 @@ async def upload_worker(main_client, user_id):
                     
                     state = manager.batch_state.get(user_id)
                     if state:
-                        if str(inner_e) != "TASK_CANCELLED":
-                            state['processed'] += 1
-                            await manager.update_status_msg(user_id)
+                        state['processed'] += 1
+                        await manager.update_status_msg(user_id)
                         
                 finally:
                     if str(data['task_id']) in active_progress:
@@ -966,6 +927,4 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
-        if str(e) == "TASK_CANCELLED":
-            return None, "TASK_CANCELLED"
         return None, str(e)
