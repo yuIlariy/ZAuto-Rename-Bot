@@ -1,6 +1,6 @@
 #pyr
 wzgram[fast]
-pymongo>=4.16.0
+pymongo>=4.19.0
 beanie>=2.1.0
 pydantic>=2.12.5
 dnspython>=2.8.0
