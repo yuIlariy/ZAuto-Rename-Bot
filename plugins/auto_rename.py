@@ -43,104 +43,134 @@ class EnhancedAutoRenamer:
         }
         
         # Clean filename for parsing
-        clean_name = filename.replace('_', ' ').replace('.', ' ')
+        clean_name = re.sub(r'[_\.\[\]\(\)]', ' ', filename)
+        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
         
         # 1. Year extraction
-        year_match = re.search(r'[\(\[]?(\d{4})[\)\]]?', clean_name)
+        year_match = re.search(r'\b(19[5-9]\d|20[0-2]\d)\b', clean_name)
         if year_match:
-            year_val = int(year_match.group(1))
-            if 1900 < year_val < 2100:
-                info['year'] = str(year_val)
+            info['year'] = year_match.group(1)
         
         # 2. Season and Episode extraction
-        
-        # Pattern 1: Anime / Hyphen Format ([S01-1123], S1 - 1123)
         anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
         if anime_match:
             info['season'] = f"S{anime_match.group(1).zfill(2)}"
             info['episode'] = f"E{anime_match.group(2).zfill(2)}"
 
-        # Pattern 2: Strict (S01E01, S1E1, S01 01)
         if not info['episode']:
-            # Mandates an E, P, or a Space between the numbers to prevent greedy splitting
             s_e_match = re.search(r'[Ss](\d{1,2})(?:[Ee][Pp]?|\s+[Ee]?[Pp]?)\s*(\d{1,4})', clean_name)
             if s_e_match:
                 info['season'] = f"S{s_e_match.group(1).zfill(2)}"
                 info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
         
-        # Pattern 3: Verbose (Season 1 Episode 1)
         if not info['season']:
             season_match = re.search(r'[Ss]eason\s*(\d{1,2})', clean_name, re.IGNORECASE)
             episode_match = re.search(r'[Ee]pisode\s*(\d{1,4})', clean_name, re.IGNORECASE)
-            if season_match:
-                info['season'] = f"S{season_match.group(1).zfill(2)}"
-            if episode_match:
-                info['episode'] = f"E{episode_match.group(1).zfill(2)}"
+            if season_match: info['season'] = f"S{season_match.group(1).zfill(2)}"
+            if episode_match: info['episode'] = f"E{episode_match.group(1).zfill(2)}"
 
-        # Pattern 4: Loose Sequence (Show - 01, Show Ep 01, [01])
         if not info['episode']:
-            # Look for hyphens or "Ep" followed by number
             loose_match = re.search(r'(?:\s-|Ep|E|Episode|^)\s*(\d{1,4})(?=\s|$|\.)', clean_name, re.IGNORECASE)
-            # Look for brackets
-            bracket_match = re.search(r'[\[\(]\s*(\d{1,4})\s*[\]\)]', clean_name)
+            bracket_match = re.search(r'\[\s*(\d{1,4})\s*\]', filename)
 
-            found_ep = None
-            if loose_match:
-                found_ep = loose_match.group(1)
-            elif bracket_match:
-                found_ep = bracket_match.group(1)
-            
-            # Validation: Ensure number found isn't the Year
+            found_ep = loose_match.group(1) if loose_match else (bracket_match.group(1) if bracket_match else None)
             if found_ep and found_ep != info['year']:
                 info['episode'] = f"E{found_ep.zfill(2)}"
 
-        # 3. Title extraction
-        title_match = re.search(r'^([A-Za-z0-9\s\.\-\']+?)(?=\s*[\(\[]?\d{4}[\)\]]?|\s*S\d|\s*E\d|\s*\-\s*\d|\s*\d{3,4}[pP]|\s*(?:4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay))', filename.replace('.', ' ').replace('_', ' '), re.IGNORECASE)
-        if title_match:
-            info['title'] = self._clean_title(title_match.group(1))
-        else:
-            info['title'] = self._clean_title(info['original_name'])
-        
         # 4. Quality extraction
-        quality_match = re.search(r'(\d{3,4}p|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
+        quality_match = re.search(r'(\d{3,4}[pP]|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
         if quality_match:
             info['quality'] = quality_match.group(1)
         
         # 5. Video codec
-        codec_match = re.search(r'(x264|x265|HEVC|H\.264|H\.265|AVC)', clean_name, re.IGNORECASE)
+        codec_match = re.search(r'(x264|x265|HEVC|H\.?264|H\.?265|AVC)', clean_name, re.IGNORECASE)
         if codec_match:
             info['video_codec'] = codec_match.group(1)
         
         # 6. Audio codec
-        audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS)', clean_name, re.IGNORECASE)
+        audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS|Opus)', clean_name, re.IGNORECASE)
         if audio_match:
             info['audio_codec'] = audio_match.group(1)
         
         # 7. Language detection
         languages = ['Hindi', 'English', 'Malayalam', 'Tamil', 'Telugu', 'Kannada', 'Dual', 'Multi']
         for lang in languages:
-            if re.search(lang, clean_name, re.IGNORECASE):
+            if re.search(rf'\b{lang}\b', clean_name, re.IGNORECASE):
                 info['language'] = lang
                 break
         
         # 8. Source type
         sources = ['BluRay', 'WEBRip', 'WEB-DL', 'HDRip', 'DVDRip', 'TVRip', 'AMZN', 'Netflix', 'Hotstar']
         for source in sources:
-            if re.search(source, clean_name, re.IGNORECASE):
+            if re.search(rf'\b{source}\b', clean_name, re.IGNORECASE):
                 info['source'] = source
                 break
         
         # 9. Bit depth and HDR
-        if '10bit' in clean_name.lower():
-            info['bit_depth'] = '10bit'
-        if 'hdr' in clean_name.lower():
-            info['hdr'] = 'HDR'
+        if '10bit' in clean_name.lower(): info['bit_depth'] = '10bit'
+        if 'hdr' in clean_name.lower(): info['hdr'] = 'HDR'
         
+        # --- SUBTRACTIVE TITLE EXTRACTION ---
+        raw_title = filename
+        
+        # Remove Extension
+        if info['extension']:
+            raw_title = re.sub(rf'\.{info["extension"]}$', '', raw_title, flags=re.IGNORECASE)
+            
+        # Safely remove domains WITHOUT greedy bracket matching
+        raw_title = re.sub(r'\[[^\]]*?\.(?:cc|com|net|org|in|me|site)\]', '', raw_title, flags=re.IGNORECASE)
+        raw_title = re.sub(r'\b[A-Za-z0-9\-]+\.(?:cc|com|net|org|in|me|site)\b', '', raw_title, flags=re.IGNORECASE)
+        raw_title = re.sub(r'@[A-Za-z0-9_]+', '', raw_title)
+        
+        # Convert delimiters to space for word-boundary subtraction
+        raw_title = re.sub(r'[_\.\[\]\(\)]', ' ', raw_title)
+        
+        # Subtract explicit metadata
+        if info['year']:
+            raw_title = re.sub(rf'\b{info["year"]}\b', '', raw_title)
+            
+        if info['season']:
+            s_num = info['season'].replace('S', '').lstrip('0') or '0'
+            raw_title = re.sub(rf'\b[Ss]eason\s*0*{s_num}\b', '', raw_title, flags=re.IGNORECASE)
+            raw_title = re.sub(rf'\b[Ss]0*{s_num}\b', '', raw_title, flags=re.IGNORECASE)
+            
+        if info['episode']:
+            e_num = info['episode'].replace('E', '').lstrip('0') or '0'
+            raw_title = re.sub(rf'\b[Ee]pisode\s*0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
+            raw_title = re.sub(rf'\b[Ee][Pp]?0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
+            if info['season']:
+                raw_title = re.sub(rf'\b[Ss]0*{s_num}\s*-\s*0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
+                raw_title = re.sub(rf'\b[Ss]0*{s_num}\s*[Ee][Pp]?\s*0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
+            raw_title = re.sub(rf'\b0*{e_num}\b', '', raw_title)
+
+        # Subtract all found tags
+        remove_words = [
+            info['quality'], info['video_codec'], info['audio_codec'], 
+            info['language'], info['source'], info['bit_depth'], info['hdr']
+        ]
+        
+        common_tags = [
+            r'\b480[pP]\b', r'\b720[pP]\b', r'\b1080[pP]\b', r'\b2160[pP]\b', r'\b4[Kk]\b', 
+            r'\b[Hh][Ee][Vv][Cc]\b', r'\b[Aa][Vv][Cc]\b', r'\b[Xx]264\b', r'\b[Xx]265\b',
+            r'\b[Oo]pus\b', r'\b[Ss]ub\b', r'\b[Dd]ual\b', r'\b[Mm]ulti\b',
+            r'\b[Ww][Ee][Bb]-?[Dd][Ll]\b', r'\b[Ww][Ee][Bb][Rr]ip\b', r'\b[Bb]lu[Rr]ay\b'
+        ]
+        
+        for tag in common_tags:
+            raw_title = re.sub(tag, '', raw_title, flags=re.IGNORECASE)
+            
+        for word in remove_words:
+            if word:
+                safe_word = re.escape(word)
+                raw_title = re.sub(rf'\b{safe_word}\b', '', raw_title, flags=re.IGNORECASE)
+
+        info['title'] = self._clean_title(raw_title)
         return info
     
     def _clean_title(self, title: str) -> str:
         """Clean and format title"""
         title = re.sub(r'[@#~\[\]\{\}\(\)]', '', title)
+        title = re.sub(r'^\s*-\s*', '', title)  # Strip stray hyphen left by subtraction
         title = re.sub(r'\s+', ' ', title)
         return title.strip().title()
     
