@@ -4,7 +4,7 @@
 # Telegram Channel @RknDeveloper & @Rkn_Botz
 # Developer @RknDeveloperr
 # Special Thanks To @ReshamOwner
-# Update Channel @Digital_Botz & @DigitalBotz_Support
+# Update Channel @Digital_Botz & @OthersBees
 
 from wzgram import Client, filters
 from wzgram.types import ReplyParameters
@@ -28,7 +28,7 @@ DIGITAL_METADATA = """
 --change-subtitle-title @OtherBs
 --change-author @OtherBs`
 
-📥 Fᴏʀ Hᴇʟᴘ Cᴏɴᴛ. @DigitalBotz_Support
+📥 Fᴏʀ Hᴇʟᴘ Cᴏɴᴛ. @OthersBees
 """
 
 SEND_METADATA = """
@@ -42,7 +42,7 @@ SEND_METADATA = """
 --change-subtitle-title @OtherBs
 --change-author @OtherBs`
 
-📥 Fᴏʀ Hᴇʟᴘ Cᴏɴᴛ. @DigitalBotz_Support
+📥 Fᴏʀ Hᴇʟᴘ Cᴏɴᴛ. @OthersBees
 """
 # ==========================================
 

@@ -106,7 +106,7 @@ logs - 📑 Check bot logs (Admin Only)
 - Please, Just Fork The Repo And Edit As Per Your Needs. # Don't Remove My Credit.
 - ᴅᴏ ɴᴏᴛ ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛs ɢɪᴠᴇɴ ɪɴ ᴛʜɪs ʀᴇᴘᴏ.
 - Importing this repo instead of forking is strictly prohibited, Kindly fork and edit as your wish. Must Give Credits for developer(s)
-- If you find any bugs or errors, [report](https://t.me/DigitalBotz_Support) it
+- If you find any bugs or errors, [report](https://t.me/OthersBees) it
 
 ## ❣️ Special Thanks 👍
 
