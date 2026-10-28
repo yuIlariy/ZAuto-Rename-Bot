@@ -541,7 +541,7 @@ async def download_worker(main_client, user_id):
                             log_msg_down = None
                             
                         if main_client.premium and main_client.uploadlimit:
-                            await digital_botz.increment_used_limit(user_id, -media.file_size)
+                            await digital_botz.increment_used_limit(user_id, -rkn_file.file_size)
                         await safe_delete_task(task_id, user_id, main_client)
                         raise Exception("MessageIdInvalid")
                         
