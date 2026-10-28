@@ -3,7 +3,7 @@ wzgram[fast]
 pymongo>=4.19.0
 beanie>=2.1.0
 pydantic>=2.14.1
-dnspython>=2.8.0
+dnspython>=2.9.0
 hachoir>=3.3.0
 Pillow>=13.0.0
 aiohttp>=3.13.3
