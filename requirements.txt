@@ -2,7 +2,7 @@
 wzgram[fast]
 pymongo>=4.16.0
 beanie>=2.1.0
-pydantic>=2.12.5
+pydantic>=2.14.1
 dnspython>=2.8.0
 hachoir>=3.3.0
 Pillow>=12.1.0
