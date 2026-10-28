@@ -372,6 +372,21 @@ async def rename_start(client, message):
 
 
 async def download_worker(main_client, user_id):
+    # FIRE NOTIFICATION IMMEDIATELY: Tell user batch is captured before entering dynamic wait
+    state = manager.batch_state.get(user_id)
+    if state and not state.get('status_msg') and user_id not in manager.silent_users:
+        try: 
+            state['status_msg'] = await main_client.send_message(user_id, "📊 **Iɴɪᴛɪᴀʟɪᴢɪɴɢ Bᴀᴛᴄʜ...**")
+            await digital_botz.db["active_batches"].update_one({"_id": user_id}, {"$set": {"status_msg_id": state['status_msg'].id}}, upsert=True)
+            await manager.update_status_msg(user_id)
+        except FloodWait as fw:
+            if fw.value > 15:
+                manager.silent_users.add(user_id)
+            else:
+                await asyncio.sleep(fw.value)
+        except Exception: 
+            pass
+
     # DYNAMIC BATCH SETTLE: Ensure all forwarded files arrive and sort correctly before starting
     last_count = -1
     while True:
@@ -405,19 +420,6 @@ async def download_worker(main_client, user_id):
                 worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
             
             try:
-                state = manager.batch_state.get(user_id)
-                if state and not state.get('status_msg') and user_id not in manager.silent_users:
-                    try: 
-                        state['status_msg'] = await main_client.send_message(user_id, "📊 **Iɴɪᴛɪᴀʟɪᴢɪɴɢ Bᴀᴛᴄʜ...**")
-                        await digital_botz.db["active_batches"].update_one({"_id": user_id}, {"$set": {"status_msg_id": state['status_msg'].id}}, upsert=True)
-                    except FloodWait as fw:
-                        if fw.value > 15:
-                            manager.silent_users.add(user_id)
-                        else:
-                            await asyncio.sleep(fw.value)
-                    except Exception: 
-                        pass
-                    
                 await manager.update_status_msg(user_id)
                 
                 rkn_processing = None
