@@ -66,7 +66,7 @@ async def custom_progress(current, total, text, message, start, task_id, filenam
     
     if message:
         try:
-            await progress_for_wzgram(current, total, text, message, start)
+            asyncio.create_task(progress_for_wzgram(current, total, text, message, start))
         except Exception:
             pass
 
