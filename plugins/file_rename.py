@@ -48,9 +48,20 @@ upload_lock = asyncio.Lock()
 # --- LIVE PROGRESS MEMORY FOR TELEMETRY ---
 # ==========================================
 active_progress = {}
+last_db_check = {}
 
 async def custom_progress(current, total, text, message, start, task_id, filename):
     """Intercepts progress to update the live web dashboard while maintaining Telegram updates."""
+    # LIVE CANCEL MONITOR: Check DB every 3 seconds to see if user hit the Cancel button
+    now = time.time()
+    if now - last_db_check.get(str(task_id), 0) > 3:
+        task = await digital_botz.db["tasks"].find_one({"_id": task_id})
+        if not task:
+            if str(task_id) in last_db_check:
+                del last_db_check[str(task_id)]
+            raise Exception("TASK_CANCELLED")
+        last_db_check[str(task_id)] = now
+
     percentage = round((current / total) * 100, 2) if total else 0
     diff = time.time() - start
     speed = current / diff if diff > 0 else 0
@@ -138,8 +149,6 @@ async def safe_delete_task(task_id, user_id, client):
                     pass
     except Exception:
         pass
-    if str(task_id) in active_progress:
-        del active_progress[str(task_id)]
     await digital_botz.delete_task(task_id)
 
 # ==========================================
@@ -351,7 +360,7 @@ async def rename_start(client, message):
     is_premium = await digital_botz.check_premium(user_id)
     
     if not is_premium and rkn_file.file_size > 2000 * 1024 * 1024:
-        btn = [[InlineKeyboardButton("💎 Vɪᴇᴡ PʀEMIᴜM Pʟᴀɴꜱ", callback_data="premium_plans")]]
+        btn = [[InlineKeyboardButton("💎 Vɪᴇᴡ Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ", callback_data="premium_plans")]]
         return await message.reply_text("⚠️ **Fɪʟᴇ Tᴏᴏ Lᴀʀɢᴇ!**\n\nFree users can only rename files up to **2GB**.\nUpgrade to Premium to upload files up to **4GB+**!", reply_markup=InlineKeyboardMarkup(btn))
 
     if not is_premium:
@@ -384,6 +393,7 @@ async def rename_start(client, message):
 
 
 async def download_worker(main_client, user_id):
+    # FIRE NOTIFICATION IMMEDIATELY: Tell user batch is captured before entering dynamic wait
     state = manager.batch_state.get(user_id)
     if state and not state.get('status_msg') and user_id not in manager.silent_users:
         try: 
@@ -398,6 +408,7 @@ async def download_worker(main_client, user_id):
         except Exception: 
             pass
 
+    # DYNAMIC BATCH SETTLE: Ensure all forwarded files arrive and sort correctly before starting
     last_count = -1
     while True:
         lock = await manager.get_lock(user_id)
@@ -423,15 +434,6 @@ async def download_worker(main_client, user_id):
             
             message = item['msg']
             task_id = item['task_id']
-
-            # 🛑 CANCELLATION CHECK BEFORE STARTING DOWNLOAD
-            check_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-            if not check_task:
-                print(f"Task {task_id} was cancelled before download. Aborting...")
-                async with lock:
-                    if user_id in manager.active_downloads and sort_key in manager.active_downloads[user_id]:
-                        manager.active_downloads[user_id].remove(sort_key)
-                continue
             
             worker_client = get_least_busy_worker(main_client)
             current_worker = worker_client
@@ -495,15 +497,6 @@ async def download_worker(main_client, user_id):
                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
                 
                 while True:
-                    # 🛑 MID-DOWNLOAD CANCELLATION CHECK
-                    check_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-                    if not check_task:
-                        if worker_client != main_client and log_msg_down:
-                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
-                            except Exception: pass
-                        print(f"Task {task_id} was cancelled during download. Aborting...")
-                        break
-
                     try:
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
@@ -557,15 +550,17 @@ async def download_worker(main_client, user_id):
                             log_msg_down = None
                             
                         if main_client.premium and main_client.uploadlimit:
-                            await digital_botz.increment_used_limit(user_id, -media.file_size)
+                            await digital_botz.increment_used_limit(user_id, -rkn_file.file_size)
                         await safe_delete_task(task_id, user_id, main_client)
                         raise Exception("MessageIdInvalid")
                         
                     except Exception as e:
-                        if worker_client != main_client and log_msg_down:
-                            try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
-                            except Exception: pass
-                            log_msg_down = None
+                        if str(e) == "TASK_CANCELLED":
+                            if worker_client != main_client and log_msg_down:
+                                try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
+                                except Exception: pass
+                                log_msg_down = None
+                            raise Exception("TASK_CANCELLED")
                             
                         wait_time = getattr(e, 'value', 5) if isinstance(e, FloodWait) else 5
                         
@@ -584,14 +579,6 @@ async def download_worker(main_client, user_id):
                         else:
                             await asyncio.sleep(wait_time)
                         continue
-
-                # 🛑 CANCELLATION CHECK POST-DOWNLOAD
-                check_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-                if not check_task or not dl_path or not os.path.exists(file_path):
-                    print(f"Task {task_id} was cancelled or download failed. Cleaning up...")
-                    await safe_delete_task(task_id, user_id, main_client)
-                    shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
-                    continue
 
                 duration = 0
                 try:
@@ -634,6 +621,8 @@ async def download_worker(main_client, user_id):
                         
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
+                if str(task_id) in active_progress:
+                    del active_progress[str(task_id)]
                 await safe_delete_task(task_id, user_id, main_client)
                 try: 
                     shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
@@ -642,8 +631,9 @@ async def download_worker(main_client, user_id):
                 
                 state = manager.batch_state.get(user_id)
                 if state:
-                    state['processed'] += 1
-                    await manager.update_status_msg(user_id)
+                    if str(inner_e) != "TASK_CANCELLED":
+                        state['processed'] += 1
+                        await manager.update_status_msg(user_id)
                 continue
             
             finally:
@@ -716,16 +706,7 @@ async def upload_worker(main_client, user_id):
                         except Exception: 
                             pass
                     break 
-
-                # 🛑 CANCELLATION CHECK BEFORE UPLOAD STARTS
-                check_task = await digital_botz.db["tasks"].find_one({"_id": data['task_id']})
-                if not check_task:
-                    print(f"Task {data['task_id']} was cancelled before upload. Cleaning up...")
-                    await safe_delete_task(data['task_id'], user_id, main_client)
-                    await remove_path(data.get('ph_path'), data.get('file_path'))
-                    shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
-                    continue
-
+                    
                 rkn_processing = data.get('rkn_processing')
                 if user_id in manager.silent_users:
                     rkn_processing = None
@@ -741,12 +722,6 @@ async def upload_worker(main_client, user_id):
                     workers_list = getattr(Config, "WORKER_CLIENTS", [])
                     
                     while True:
-                        # 🛑 CANCELLATION CHECK DURING RETRIES
-                        check_task = await digital_botz.db["tasks"].find_one({"_id": data['task_id']})
-                        if not check_task:
-                            print(f"Task {data['task_id']} was cancelled during upload retry loop.")
-                            break
-
                         try:
                             async def perform_upload():
                                 if not uploader.is_connected:
@@ -762,10 +737,6 @@ async def upload_worker(main_client, user_id):
                                         await asyncio.sleep(1.5)
                                         delivered = False
                                         while not delivered:
-                                            # Check cancellation during delivery
-                                            if not await digital_botz.db["tasks"].find_one({"_id": data['task_id']}):
-                                                break
-
                                             try:
                                                 await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
                                                 delivered = True
@@ -829,6 +800,8 @@ async def upload_worker(main_client, user_id):
                                 error = await perform_upload()
 
                             if error:
+                                if error == "TASK_CANCELLED":
+                                    raise Exception("TASK_CANCELLED")
                                 if str(error).startswith("FLOODWAIT:"):
                                     try: wait_time = int(str(error).split(":")[1])
                                     except: wait_time = 5
@@ -891,6 +864,8 @@ async def upload_worker(main_client, user_id):
                             raise Exception("MessageIdInvalid")
                             
                         except Exception as perform_e:
+                            if str(perform_e) == "TASK_CANCELLED":
+                                raise Exception("TASK_CANCELLED")
                             if isinstance(perform_e, FloodWait):
                                 if uploader != app and not is_main_bot:
                                     uploader.is_healthy = False
@@ -909,14 +884,17 @@ async def upload_worker(main_client, user_id):
                     
                     state = manager.batch_state.get(user_id)
                     if state:
-                        state['processed'] += 1
-                        await manager.update_status_msg(user_id)
+                        if str(inner_e) != "TASK_CANCELLED":
+                            state['processed'] += 1
+                            await manager.update_status_msg(user_id)
                         
                 finally:
+                    if str(data['task_id']) in active_progress:
+                        del active_progress[str(data['task_id'])]
+
                     if uploader != main_client and uploader != app:
                         worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
 
-                    await safe_delete_task(data['task_id'], user_id, main_client)
                     await remove_path(data['ph_path'], data['file_path'])
                     try: 
                         shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
@@ -966,4 +944,6 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
     except FloodWait as fw:
         return None, f"FLOODWAIT:{fw.value}"
     except Exception as e:
+        if str(e) == "TASK_CANCELLED":
+            return None, "TASK_CANCELLED"
         return None, str(e)
