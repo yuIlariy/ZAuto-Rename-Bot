@@ -121,11 +121,23 @@ def get_least_busy_worker(main_client):
 # --- SAFE DELETE TRACKER ---
 # ==========================================
 async def safe_delete_task(task_id, user_id, client):
-    """Unconditionally hunts down and deletes the processing message from chat before wiping DB record."""
+    """Unconditionally hunts down and deletes the processing message from chat and log channel before wiping DB record."""
     try:
         raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-        if raw_task and raw_task.get("processing_msg_id", 0) != 0:
-            await client.delete_messages(user_id, raw_task["processing_msg_id"])
+        if raw_task:
+            # Delete processing message from user's chat
+            if raw_task.get("processing_msg_id", 0) != 0:
+                try:
+                    await client.delete_messages(user_id, raw_task["processing_msg_id"])
+                except Exception:
+                    pass
+            
+            # Delete log message from log channel
+            if raw_task.get("log_msg_id", 0) != 0:
+                try:
+                    await client.delete_messages(Config.LOG_CHANNEL, raw_task["log_msg_id"])
+                except Exception:
+                    pass
     except Exception:
         pass
     await digital_botz.delete_task(task_id)
