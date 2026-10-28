@@ -434,6 +434,15 @@ async def download_worker(main_client, user_id):
             
             message = item['msg']
             task_id = item['task_id']
+
+            task_record = await digital_botz.db["tasks"].find_one({"_id": task_id})
+            if not task_record:
+                async with lock:
+                    if user_id in manager.active_downloads and sort_key in manager.active_downloads[user_id]:
+                        manager.active_downloads[user_id].remove(sort_key)
+                if user_id in manager.upload_events:
+                    manager.upload_events[user_id].set()
+                continue
             
             worker_client = get_least_busy_worker(main_client)
             current_worker = worker_client
@@ -707,6 +716,19 @@ async def upload_worker(main_client, user_id):
                             pass
                     break 
                     
+                task_record = await digital_botz.db["tasks"].find_one({"_id": data['task_id']})
+                if not task_record:
+                    if str(data['task_id']) in active_progress:
+                        del active_progress[str(data['task_id'])]
+                    await remove_path(data['ph_path'], data['file_path'])
+                    try: 
+                        shutil.rmtree(f"Renames/{data['task_id']}", ignore_errors=True)
+                    except Exception: 
+                        pass
+                    if user_id in manager.upload_events:
+                        manager.upload_events[user_id].set()
+                    continue
+
                 rkn_processing = data.get('rkn_processing')
                 if user_id in manager.silent_users:
                     rkn_processing = None
