@@ -48,6 +48,7 @@ upload_lock = asyncio.Lock()
 # --- LIVE PROGRESS MEMORY FOR TELEMETRY ---
 # ==========================================
 active_progress = {}
+last_ui_update = {}
 
 async def custom_progress(current, total, text, message, start, task_id, filename):
     """Intercepts progress to update the live web dashboard while maintaining Telegram updates."""
@@ -65,10 +66,13 @@ async def custom_progress(current, total, text, message, start, task_id, filenam
     }
     
     if message:
-        try:
-            asyncio.create_task(progress_for_wzgram(current, total, text, message, start))
-        except Exception:
-            pass
+        now = time.time()
+        if now - last_ui_update.get(str(task_id), 0) > 2.0 or current == total:
+            last_ui_update[str(task_id)] = now
+            try:
+                asyncio.create_task(progress_for_wzgram(current, total, text, message, start))
+            except Exception:
+                pass
 
 # ==========================================
 # --- SEQUENCE SORTER ---
@@ -749,17 +753,11 @@ async def upload_worker(main_client, user_id):
                                                 pass
                                     return error
                                 else:
-                                    up_start_time = time.time()
-                                    active_prog = custom_progress
-                                    active_args = (UPLOAD_TEXT, rkn_processing if (user_id not in manager.silent_users) else None, up_start_time, data['task_id'], data['new_filename'])
-
-                                    if data['upload_type'] == "document":
-                                        await asyncio.wait_for(main_client.send_document(user_id, document=data['file_path'], file_name=data['new_filename'], thumb=data['ph_path'], caption=data['caption'], progress=active_prog, progress_args=active_args), timeout=7200)
-                                    elif data['upload_type'] == "video":
-                                        await asyncio.wait_for(main_client.send_video(user_id, video=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=active_prog, progress_args=active_args), timeout=7200)
-                                    elif data['upload_type'] == "audio":
-                                        await asyncio.wait_for(main_client.send_audio(user_id, audio=data['file_path'], file_name=data['new_filename'], caption=data['caption'], thumb=data['ph_path'], duration=data['duration'], progress=active_prog, progress_args=active_args), timeout=7200)
-                                    return None
+                                    filw, error = await upload_files(
+                                        main_client, user_id, data['upload_type'], data['file_path'], 
+                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id']
+                                    )
+                                    return error
 
                             if uploader == app:
                                 async with upload_lock:
@@ -874,6 +872,9 @@ async def upload_worker(main_client, user_id):
                 finally:
                     if str(data['task_id']) in active_progress:
                         del active_progress[str(data['task_id'])]
+
+                    if str(data['task_id']) in last_ui_update:
+                        del last_ui_update[str(data['task_id'])]
 
                     if uploader != main_client and uploader != app:
                         worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
