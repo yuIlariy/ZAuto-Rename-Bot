@@ -129,14 +129,12 @@ async def safe_delete_task(task_id, user_id, client):
     try:
         raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
         if raw_task:
-            # Delete processing message from user's chat
             if raw_task.get("processing_msg_id", 0) != 0:
                 try:
                     await client.delete_messages(user_id, raw_task["processing_msg_id"])
                 except Exception:
                     pass
             
-            # Delete log message from log channel
             if raw_task.get("log_msg_id", 0) != 0:
                 try:
                     await client.delete_messages(Config.LOG_CHANNEL, raw_task["log_msg_id"])
@@ -219,7 +217,7 @@ class QueueManager:
         try:
             await state['status_msg'].edit(text)
         except FloodWait as fw:
-            if fw.value > 15:
+            if fw.value > 10:
                 self.silent_users.add(user_id)
                 try: await state['status_msg'].delete()
                 except: pass
@@ -237,7 +235,6 @@ class QueueManager:
         self.active_downloads[user_id] = []
         self.staging_pool[user_id] = []
         self.upload_events[user_id] = asyncio.Event()
-        self.silent_users.discard(user_id)
 
     def register_workers(self, user_id, dl_task, ul_task):
         self.workers[user_id] = {'dl': dl_task, 'ul': ul_task}
@@ -388,7 +385,6 @@ async def rename_start(client, message):
 
 
 async def download_worker(main_client, user_id):
-    # FIRE NOTIFICATION IMMEDIATELY: Tell user batch is captured before entering dynamic wait
     state = manager.batch_state.get(user_id)
     if state and not state.get('status_msg') and user_id not in manager.silent_users:
         try: 
@@ -396,14 +392,13 @@ async def download_worker(main_client, user_id):
             await digital_botz.db["active_batches"].update_one({"_id": user_id}, {"$set": {"status_msg_id": state['status_msg'].id}}, upsert=True)
             await manager.update_status_msg(user_id)
         except FloodWait as fw:
-            if fw.value > 15:
+            if fw.value > 10:
                 manager.silent_users.add(user_id)
             else:
                 await asyncio.sleep(fw.value)
         except Exception: 
             pass
 
-    # DYNAMIC BATCH SETTLE: Ensure all forwarded files arrive and sort correctly before starting
     last_count = -1
     while True:
         lock = await manager.get_lock(user_id)
@@ -444,7 +439,7 @@ async def download_worker(main_client, user_id):
                         rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**")
                         await digital_botz.update_processing_msg(task_id, rkn_processing.id)
                     except FloodWait as fw:
-                        if fw.value > 15:
+                        if fw.value > 10:
                             manager.silent_users.add(user_id)
                         else:
                             await asyncio.sleep(fw.value)
@@ -477,7 +472,7 @@ async def download_worker(main_client, user_id):
                     try: 
                         await rkn_processing.edit("📥 **Dᴏᴡɴʟᴏᴀᴅɪɴɢ...**")
                     except FloodWait as fw:
-                        if fw.value > 15:
+                        if fw.value > 10:
                             manager.silent_users.add(user_id)
                             try: await rkn_processing.delete()
                             except: pass
@@ -560,7 +555,11 @@ async def download_worker(main_client, user_id):
                         if isinstance(e, FloodWait):
                             if worker_client != main_client:
                                 worker_client.is_healthy = False
-                            if e.value > 15:
+                                async def heal_worker(w, delay):
+                                    await asyncio.sleep(delay)
+                                    w.is_healthy = True
+                                asyncio.create_task(heal_worker(worker_client, e.value))
+                            if e.value > 10:
                                 manager.silent_users.add(user_id)
 
                         if len(workers_list) > 1 and worker_client != main_client:
@@ -689,7 +688,7 @@ async def upload_worker(main_client, user_id):
                         try: 
                             await candidate['rkn_processing'].edit("⏳ **Wᴀɪᴛɪɴɢ ɪɴ Qᴜᴇᴜᴇ...**")
                         except FloodWait as fw:
-                            if fw.value > 15:
+                            if fw.value > 10:
                                 manager.silent_users.add(user_id)
                                 try: await candidate['rkn_processing'].delete()
                                 except: pass
@@ -733,7 +732,7 @@ async def upload_worker(main_client, user_id):
                                                 await main_client.copy_message(user_id, Config.LOG_CHANNEL, filw.id)
                                                 delivered = True
                                             except FloodWait as fw:
-                                                if fw.value > 15:
+                                                if fw.value > 10:
                                                     manager.silent_users.add(user_id)
                                                     if rkn_processing:
                                                         try: await rkn_processing.delete()
@@ -765,7 +764,7 @@ async def upload_worker(main_client, user_id):
                                         try: 
                                             await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
                                         except FloodWait as fw:
-                                            if fw.value > 15:
+                                            if fw.value > 10:
                                                 manager.silent_users.add(user_id)
                                                 try: await rkn_processing.delete()
                                                 except: pass
@@ -777,7 +776,7 @@ async def upload_worker(main_client, user_id):
                                     try: 
                                         await rkn_processing.edit("📤 **Uᴩʟᴏᴀᴅɪɴɢ...**")
                                     except FloodWait as fw:
-                                        if fw.value > 15:
+                                        if fw.value > 10:
                                             manager.silent_users.add(user_id)
                                             try: await rkn_processing.delete()
                                             except: pass
@@ -790,12 +789,19 @@ async def upload_worker(main_client, user_id):
                                     try: wait_time = int(str(error).split(":")[1])
                                     except: wait_time = 5
                                     
-                                    if wait_time > 15:
+                                    if wait_time > 10:
                                         manager.silent_users.add(user_id)
                                         if rkn_processing:
                                             try: await rkn_processing.delete()
                                             except: pass
                                             rkn_processing = None
+                                        
+                                        if uploader != app and not is_main_bot:
+                                            uploader.is_healthy = False
+                                            async def heal_worker(w, delay):
+                                                await asyncio.sleep(delay)
+                                                w.is_healthy = True
+                                            asyncio.create_task(heal_worker(uploader, wait_time))
                                 else:
                                     wait_time = 5
 
@@ -851,7 +857,11 @@ async def upload_worker(main_client, user_id):
                             if isinstance(perform_e, FloodWait):
                                 if uploader != app and not is_main_bot:
                                     uploader.is_healthy = False
-                                if perform_e.value > 15:
+                                    async def heal_worker(w, delay):
+                                        await asyncio.sleep(delay)
+                                        w.is_healthy = True
+                                    asyncio.create_task(heal_worker(uploader, perform_e.value))
+                                if perform_e.value > 10:
                                     manager.silent_users.add(user_id)
                                     if rkn_processing:
                                         try: await rkn_processing.delete()
