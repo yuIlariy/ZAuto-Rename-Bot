@@ -158,7 +158,7 @@ async def leaderboard_cmd(bot, message):
         await rkn.edit(f"⚠️ **Error Fetching Leaderboard:**\n\n`{e}`\n\n`{traceback_str[-800:]}`")
 
 # --- ADD / REMOVE PREMIUM COMMANDS ---
-@Client.on_message(filters.command("addprem") & filters.user(Config.ADMIN))
+@Client.on_message(filters.command(["addprem", "addpremium", "add_premium"]) & filters.user(Config.ADMIN))
 async def add_premium_user(bot, message):
     if len(message.command) < 2:
         await message.reply_text(
@@ -176,26 +176,73 @@ async def add_premium_user(bot, message):
         if not await digital_botz.is_user_exist(user_id):
             return await message.reply_text("⚠️ User not found in database. They need to start the bot first.")
 
+        # Save to database
         await digital_botz.add_premium(user_id, days)
         
-        # LIFETIME FIX: Determine dynamic text based on days
-        plan_text = "Lifetime ♾️" if days == 0 else f"{days} days"
+        # Time and Date calculations in Nairobi time
+        tz = pytz.timezone("Africa/Nairobi")
+        now = datetime.datetime.now(tz)
+        joining_date = now.strftime("%d-%m-%Y")
+        joining_time = now.strftime("%I:%M:%S %p")
+
+        # Fetch user details safely
+        try:
+            user = await bot.get_users(user_id)
+            first_name = user.first_name or "User"
+        except Exception:
+            first_name = f"User {user_id}"
+
+        # Clean name to avoid breaking markdown formatting
+        first_name = str(first_name).replace('_', ' ').replace('*', '').replace('`', '').replace('[', '').replace(']', '')
+
+        # Handle Lifetime vs Days
+        if days == 0:
+            plan_text = "Lifetime ♾️"
+            expiry_date = "Lifetime ♾️"
+            expiry_time = "Lifetime ♾️"
+        else:
+            plan_text = "1 month" if days == 30 else f"{days} days"
+            expiry_dt = now + datetime.timedelta(days=days)
+            expiry_date = expiry_dt.strftime("%d-%m-%Y")
+            expiry_time = expiry_dt.strftime("%I:%M:%S %p")
+
+        # Formatted Admin Response (No Plans or Upload Limits)
+        response_text = (
+            f"ᴘʀᴇᴍɪᴜᴍ ᴀᴅᴅᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅\n\n"
+            f"👤 ᴜꜱᴇʀ : {first_name}\n"
+            f"⚡ ᴜꜱᴇʀ ɪᴅ : `{user_id}`\n"
+            f"⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : {plan_text}\n\n"
+            f"⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {joining_date}\n"
+            f"⏰ ᴊᴏɪɴɪɴɢ ᴛɪᴍᴇ : {joining_time}\n\n"
+            f"⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_date}\n"
+            f"⏰ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : {expiry_time}"
+        )
         
-        await message.reply_text(f"✅ **Successfully upgraded user `{user_id}` to Premium for {plan_text}!**")
+        await message.reply_text(response_text, disable_web_page_preview=True)
         
-        # Try to notify the user
+        # Send Styled Notification to User
         try:
             await bot.send_message(
-                user_id, 
-                f"🎉 **Congratulations!**\n\n"
-                f"Your payment was successful! You have been upgraded to **Premium Status** for **{plan_text}**! 🌟\n\n"
-                "**Premium Features Unlocked:**\n"
-                "• ♾️ No 6GB Daily Limit\n"
-                "• 🚀 Upload files larger than 2GB\n"
-                "• ⚡ Priority Processing\n\n"
-                "Thank you for your support!"
+                chat_id=user_id, 
+                text=(
+                    f"🎉 **Congratulations!**\n\n"
+                    f"Your payment was successful! You have been upgraded to **Premium Status**! 🌟\n\n"
+                    f"👤 ᴜꜱᴇʀ : {first_name}\n"
+                    f"⚡ ᴜꜱᴇʀ ɪᴅ : `{user_id}`\n"
+                    f"⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : {plan_text}\n\n"
+                    f"⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {joining_date}\n"
+                    f"⏰ ᴊᴏɪɴɪɴɢ ᴛɪᴍᴇ : {joining_time}\n\n"
+                    f"⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_date}\n"
+                    f"⏰ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : {expiry_time}\n\n"
+                    f"**Premium Features Unlocked:**\n"
+                    f"• ♾️ No 6GB Daily Limit\n"
+                    f"• 🚀 Upload files larger than 2GB\n"
+                    f"• ⚡ Priority Processing\n\n"
+                    f"Thank you for your support!"
+                ),
+                disable_web_page_preview=True
             )
-        except:
+        except Exception:
             pass # User might have blocked the bot
             
     except ValueError:
