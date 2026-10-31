@@ -1,24 +1,3 @@
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">
-
-![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=𝗪𝗘𝗟𝗖𝗢𝗠+𝗧𝗢+𝗗𝗜𝗚𝗜𝗧𝗔𝗟+𝗔𝗨𝗧𝗢+𝗥𝗘𝗡𝗔𝗠𝗘+𝗕𝗢𝗧!;𝗖𝗥𝗘𝗔𝗧𝗘𝗗+𝗕𝗬+𝗗𝗜𝗚𝗜𝗧𝗔𝗟+𝗕𝗢𝗧𝗭!;𝗜+𝗔𝗠+𝗣𝗢𝗪𝗘𝗥𝗙𝗨𝗟+𝗧𝗚+𝗥𝗘𝗡𝗔𝗠𝗘+𝗕𝗢𝗧!&color=4169E1)
-
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">
-
-
-<p align="center">
-  <img src="https://files.catbox.moe/561z4s.jpg" alt="RKN RENAME BOT V1">
-</p>
-
-<p align="center">
-
-![Fork](https://img.shields.io/github/forks/DigitalBotz/Digital-Auto-Rename-Bot?style=for-the-badge)
-![Stars](https://img.shields.io/github/stars/DigitalBotz/Digital-Auto-Rename-Bot?color=%23&style=for-the-badge)
-![License](https://img.shields.io/github/license/DigitalBotz/Digital-Auto-Rename-Bot?style=for-the-badge)
-![Issues](https://img.shields.io/github/issues/DigitalBotz/Digital-Auto-Rename-Bot?style=for-the-badge)
-
-</p>
-
-
 ### Sᴀᴍᴩʟᴇ Bᴏᴛ
 
 * [Digital Auto _Rename_Bot](http://t.me/Digital_Auto_Rename_Bot)
@@ -76,20 +55,26 @@
 
 ## Botfather Commands
 ```
-start - 𝖈ʜᴇᴄᴋ 𝖎 𝖆ᴍ ʟɪᴠᴇ.
-view_thumb - 𝖙ᴏ 𝖘ᴇᴇ 𝖞ᴏᴜʀ 𝖈ᴜ𝖘ᴛᴏᴍ 𝖙ʜᴜᴍʙɴᴀɪʟ !!
-del_thumb - 𝖙ᴏ 𝖉ᴇʟᴇᴛᴇ 𝖞ᴏᴜʀ 𝖈ᴜ𝖘ᴛᴏᴍ 𝖙ʜᴜᴍʙɴᴀɪʟ !!
-set_caption - Sᴇᴛ A Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-see_caption - Sᴇᴇ Yᴏᴜʀ Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-del_caption - Dᴇʟᴇᴛᴇ Cᴜsᴛᴏᴍ Cᴀᴘᴛɪᴏɴ !!
-autorename - Set Custom Format (auto renaming process) 
-restart - ᴛᴏ ʀᴇsᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ᴀɴᴅ sᴇɴᴅ ᴍᴇssᴀɢᴇ ᴀʟʟ ᴅʙ ᴜsᴇʀs (Aᴅᴍɪɴ Oɴʟʏ)
-ban - ban members using command (admin only)
-unban - unban members using command (admin only)
-banned_users - check bot all ban users using command (admin only)
-logs - ᴄʜᴇᴄᴋ ʙᴏᴛ ʟᴏɢs (Aᴅᴍɪɴ Oɴʟʏ)
-status - Cʜᴇᴄᴋ Bᴏᴛ Sᴛᴀᴛᴜs (Aᴅᴍɪɴ Oɴʟʏ)
-broadcast - Sᴇɴᴅ Mᴇssᴀɢᴇ Tᴏ Aʟʟ Usᴇʀs (Aᴅᴍɪɴ Oɴʟʏ)
+start - ⚡️ Check if the bot is alive
+myplan - 📋 Check your plan and expiry details
+plans - 💎 View premium subscription plans
+upgrade - 🚀 Upgrade to premium for higher limits
+view_thumb - 🖼️ View your custom thumbnail
+del_thumb - 🗑️ Delete your custom thumbnail
+set_caption - 📝 Set a custom caption
+see_caption - 👁️ See your custom caption
+del_caption - ❌ Delete your custom caption
+autorename - ⚙️ Set custom auto-rename format
+metadata - 🎉 Set or change metadata code.
+status - 📊 Check bot status (Admin Only)
+addprem - ➕ Add premium to a user (Admin Only)
+rmprem - ➖ Remove premium from a user (Admin Only)
+restart - 🔄 Restart bot and notify users (Admin Only)
+broadcast - 📢 Send message to all users (Admin Only)
+ban - 🚫 Ban a user from the bot (Admin Only)
+unban - ✅ Unban a user (Admin Only)
+banned_users - 📜 Check list of banned users (Admin Only)
+logs - 📑 Check bot logs (Admin Only)
 ```
 
 ## Note:
