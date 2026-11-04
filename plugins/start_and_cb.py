@@ -226,10 +226,10 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(text=PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "thumbnail":
-        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
+        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]])) 
       
     elif data == "caption":
-        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
+        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]])) 
       
     elif data == "bot_status":
         real_users = await digital_botz.total_users_count()
@@ -246,7 +246,7 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.BOT_STATUS.format(uptime, total_users, total_premium_users, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]])) 
       
     elif data == "live_status":
         currentTime = get_uptime(client.uptime)
@@ -262,7 +262,7 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.LIVE_STATUS.format(currentTime, cpu_usage, ram_usage, total_h, used_h, disk_usage, free_h, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]])) 
       
     elif data == "source_code":
         await query.message.edit_text(text=rkn.DEV_TXT, disable_web_page_preview=True,
