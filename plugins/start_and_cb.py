@@ -16,6 +16,7 @@ import random, asyncio, datetime, pytz, time, psutil, shutil
 # wzgram imports
 from wzgram import Client, filters
 from wzgram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, CallbackQuery
+from wzgram.enums import ButtonStyle
 
 # bots imports
 from helper.database import digital_botz
@@ -146,13 +147,13 @@ async def myplan_cmd(client, message):
             "📂 **Mᴀx Fɪʟᴇ Sɪᴢᴇ:** `2ɢʙ`\n\n"
             "**🌟 Uᴩɢʀᴀᴅᴇ ᴛᴏ Pʀᴇᴍɪᴜᴍ ꜰᴏʀ 4GB+ Uᴩʟᴏᴀᴅꜱ ᴀɴᴅ Uɴʟɪᴍɪᴛᴇᴅ Dᴀɪʟy Uꜱᴀɢᴇ!**"
         )
-        btn = [[InlineKeyboardButton("💎 Uᴩɢʀᴀᴅᴇ Pʟᴀɴ", callback_data="premium_plans")]]
+        btn = [[InlineKeyboardButton("💎 Uᴩɢʀᴀᴅᴇ Pʟᴀɴ", callback_data="premium_plans", style=ButtonStyle.SUCCESS)]]
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(btn))
 
 @Client.on_message(filters.private & filters.command(["plans", "upgrade"]))
 async def plans_cmd(client, message):
-    btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266)],
-           [InlineKeyboardButton("✖️ Cʟᴏꜱᴇ", callback_data="close")]]
+    btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266, style=ButtonStyle.SUCCESS)],
+           [InlineKeyboardButton("✖️ Cʟᴏꜱᴇ", callback_data="close", style=ButtonStyle.DANGER)]]
     await message.reply_text(PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
 @Client.on_message(filters.private & filters.command("start"))
@@ -163,13 +164,13 @@ async def start(client, message):
         STATS_STARTED = True
 
     start_button = [[        
-        InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs'),
-        InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees')
+        InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees', style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about'),
-        InlineKeyboardButton('Hᴇʟᴩ', callback_data='help')       
+        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Hᴇʟᴩ', callback_data='help', style=ButtonStyle.PRIMARY)       
         ],[
-        InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans')
+        InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans', style=ButtonStyle.SUCCESS)
         ]]
         
     user = message.from_user
@@ -188,47 +189,47 @@ async def cb_handler(client, query: CallbackQuery):
     data = query.data 
     if data == "start":
         start_button = [[        
-        InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs'),
-        InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees')
+        InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees', style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about'),
-        InlineKeyboardButton('Hᴇʟᴩ', callback_data='help')       
+        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Hᴇʟᴩ', callback_data='help', style=ButtonStyle.PRIMARY)       
         ],[
-        InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans')
+        InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans', style=ButtonStyle.SUCCESS)
         ]]
         await query.message.edit_text(text=rkn.START_TXT.format(query.from_user.mention), disable_web_page_preview=True, reply_markup = InlineKeyboardMarkup(start_button))
         
     elif data == "help":
         await query.message.edit_text(text=rkn.HELP_TXT, disable_web_page_preview=True,
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("ᴛʜᴜᴍʙɴᴀɪʟ", callback_data = "thumbnail"),
-                InlineKeyboardButton("ᴄᴀᴘᴛɪᴏɴ", callback_data = "caption")
+                InlineKeyboardButton("ᴛʜᴜᴍʙɴᴀɪʟ", callback_data = "thumbnail", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton("ᴄᴀᴘᴛɪᴏɴ", callback_data = "caption", style=ButtonStyle.PRIMARY)
                 ],[          
-                InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data = "about"),
-                InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start")
+                InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data = "about", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start", style=ButtonStyle.DANGER)
                 ]]))         
         
     elif data == "about":
         about_button = [[
-        InlineKeyboardButton("𝚂ᴏᴜʀᴄᴇ", callback_data = "source_code"),
-        InlineKeyboardButton("ʙᴏᴛ sᴛᴀᴛᴜs", callback_data = "bot_status")
+        InlineKeyboardButton("𝚂ᴏᴜʀᴄᴇ", callback_data = "source_code", style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton("ʙᴏᴛ sᴛᴀᴛᴜs", callback_data = "bot_status", style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton("ʟɪᴠᴇ sᴛᴀᴛᴜs", callback_data = "live_status"),
-        InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start")
+        InlineKeyboardButton("ʟɪᴠᴇ sᴛᴀᴛᴜs", callback_data = "live_status", style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start", style=ButtonStyle.DANGER)
         ]]
         await query.message.edit_text(text=rkn.ABOUT_TXT.format(client.mention, __developer__, __programer__, __library__, __language__, __database__, _bot_version_),
             disable_web_page_preview = True, reply_markup=InlineKeyboardMarkup(about_button))    
 
     elif data == "premium_plans":
-        btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266)],
-               [InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="start")]]
+        btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266, style=ButtonStyle.SUCCESS)],
+               [InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="start", style=ButtonStyle.DANGER)]]
         await query.message.edit_text(text=PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "thumbnail":
-        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]])) 
+        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]]), style=ButtonStyle.DANGER) 
       
     elif data == "caption":
-        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]])) 
+        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]]), style=ButtonStyle.DANGER) 
       
     elif data == "bot_status":
         real_users = await digital_botz.total_users_count()
@@ -245,7 +246,7 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.BOT_STATUS.format(uptime, total_users, total_premium_users, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]])) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]]), style=ButtonStyle.DANGER) 
       
     elif data == "live_status":
         currentTime = get_uptime(client.uptime)
@@ -261,15 +262,15 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.LIVE_STATUS.format(currentTime, cpu_usage, ram_usage, total_h, used_h, disk_usage, free_h, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]])) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]]), style=ButtonStyle.DANGER) 
       
     elif data == "source_code":
         await query.message.edit_text(text=rkn.DEV_TXT, disable_web_page_preview=True,
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("💞 Sᴏᴜʀᴄᴇ Cᴏᴅᴇ 💞", url="https://github.com/DigitalBotz/Digital-Auto-Rename-Bot")
+                InlineKeyboardButton("💞 Sᴏᴜʀᴄᴇ Cᴏᴅᴇ 💞", url="https://github.com/DigitalBotz/Digital-Auto-Rename-Bot", style=ButtonStyle.PRIMARY)
             ],[
-                InlineKeyboardButton("🔒 Cʟᴏꜱᴇ", callback_data = "close"),
-                InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data = "start")
+                InlineKeyboardButton("🔒 Cʟᴏꜱᴇ", callback_data = "close", style=ButtonStyle.DANGER),
+                InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data = "start", style=ButtonStyle.DANGER)
                  ]]))          
             
     elif data == "close":
