@@ -312,7 +312,7 @@ async def save_custom_format(client: Client, message: Message):
     try:
         await digital_botz.add_user_format_template(message.from_user.id, format_template)
         await message.reply_text(
-            f"✅ Format set to **Custom!**\\n\\n`{format_template}`"
+            f"✅ Format set to **Custom!**\n\n`{format_template}`"
         )
     except Exception as e:
         print(f"Custom Format Save Error: {e}")
