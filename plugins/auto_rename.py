@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from wzgram import Client, filters
+from wzgram.enums import ButtonStyle
 from wzgram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from wzgram.errors import MessageNotModified
 from datetime import datetime
@@ -239,9 +240,9 @@ async def set_format_command(client: Client, message: Message):
     reply_text += "\n\n**Usage:** `/autorename {title} ({year}) {quality} {language}.{ext}`"
     
     buttons = [
-        [InlineKeyboardButton("🎬 Movie Format", callback_data="format_movie"), InlineKeyboardButton("📺 Series Format", callback_data="format_series")],
-        [InlineKeyboardButton("🎵 Music Format", callback_data="format_music"), InlineKeyboardButton("📄 Document Format", callback_data="format_doc")],
-        [InlineKeyboardButton("✍️ Custom Format", callback_data="format_custom")]
+        [InlineKeyboardButton("🎬 Movie Format", callback_data="format_movie", style=ButtonStyle.PRIMARY), InlineKeyboardButton("📺 Series Format", callback_data="format_series", style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton("🎵 Music Format", callback_data="format_music", style=ButtonStyle.SUCCESS), InlineKeyboardButton("📄 Document Format", callback_data="format_doc", style=ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton("✍️ Custom Format", callback_data="format_custom", style=ButtonStyle.DANGER)]
     ]
     
     await message.reply_text(reply_text, reply_markup=InlineKeyboardMarkup(buttons))
