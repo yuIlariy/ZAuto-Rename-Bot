@@ -293,3 +293,28 @@ async def format_callback(client, callback_query):
             await callback_query.answer(f"❌ Error: {str(e)}", show_alert=True)
         except:
             pass
+
+@Client.on_message(filters.reply & filters.text, group=1)
+async def save_custom_format(client: Client, message: Message):
+    """Save a custom format sent as a reply to the custom format prompt."""
+    replied_message = message.reply_to_message
+
+    if not replied_message or not replied_message.text:
+        return
+
+    if "Please send your custom format template below:" not in replied_message.text:
+        return
+
+    format_template = message.text.strip()
+    if not format_template:
+        return
+
+    try:
+        await digital_botz.add_user_format_template(message.from_user.id, format_template)
+        await message.reply_text(
+            f"✅ Format set to **Custom!**\\n\\n`{format_template}`"
+        )
+    except Exception as e:
+        print(f"Custom Format Save Error: {e}")
+        await message.reply_text(f"❌ Failed to save custom format: {str(e)}")
+
