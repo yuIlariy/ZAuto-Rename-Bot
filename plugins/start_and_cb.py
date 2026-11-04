@@ -167,7 +167,7 @@ async def start(client, message):
         InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs', style=ButtonStyle.PRIMARY),
         InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees', style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.SUCCESS),
         InlineKeyboardButton('Hᴇʟᴩ', callback_data='help', style=ButtonStyle.PRIMARY)       
         ],[
         InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans', style=ButtonStyle.SUCCESS)
@@ -192,7 +192,7 @@ async def cb_handler(client, query: CallbackQuery):
         InlineKeyboardButton('Uᴩᴅᴀᴛᴇꜱ', url='https://t.me/OtherBs', style=ButtonStyle.PRIMARY),
         InlineKeyboardButton('Sᴜᴩᴩᴏʀᴛ', url='https://t.me/OthersBees', style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton('Aʙᴏᴜᴛ', callback_data='about', style=ButtonStyle.SUCCESS),
         InlineKeyboardButton('Hᴇʟᴩ', callback_data='help', style=ButtonStyle.PRIMARY)       
         ],[
         InlineKeyboardButton('💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ 💎', callback_data='premium_plans', style=ButtonStyle.SUCCESS)
@@ -205,7 +205,7 @@ async def cb_handler(client, query: CallbackQuery):
                 InlineKeyboardButton("ᴛʜᴜᴍʙɴᴀɪʟ", callback_data = "thumbnail", style=ButtonStyle.PRIMARY),
                 InlineKeyboardButton("ᴄᴀᴘᴛɪᴏɴ", callback_data = "caption", style=ButtonStyle.PRIMARY)
                 ],[          
-                InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data = "about", style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data = "about", style=ButtonStyle.SUCCESS),
                 InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start", style=ButtonStyle.DANGER)
                 ]]))         
         
@@ -214,7 +214,7 @@ async def cb_handler(client, query: CallbackQuery):
         InlineKeyboardButton("𝚂ᴏᴜʀᴄᴇ", callback_data = "source_code", style=ButtonStyle.PRIMARY),
         InlineKeyboardButton("ʙᴏᴛ sᴛᴀᴛᴜs", callback_data = "bot_status", style=ButtonStyle.PRIMARY)
         ],[
-        InlineKeyboardButton("ʟɪᴠᴇ sᴛᴀᴛᴜs", callback_data = "live_status", style=ButtonStyle.PRIMARY),
+        InlineKeyboardButton("ʟɪᴠᴇ sᴛᴀᴛᴜs", callback_data = "live_status", style=ButtonStyle.SUCCESS),
         InlineKeyboardButton("Bᴀᴄᴋ", callback_data = "start", style=ButtonStyle.DANGER)
         ]]
         await query.message.edit_text(text=rkn.ABOUT_TXT.format(client.mention, __developer__, __programer__, __library__, __language__, __database__, _bot_version_),
@@ -226,10 +226,10 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(text=PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "thumbnail":
-        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]]), style=ButtonStyle.DANGER) 
+        await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
       
     elif data == "caption":
-        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help")]]), style=ButtonStyle.DANGER) 
+        await query.message.edit_text(text=rkn.CAPTION, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
       
     elif data == "bot_status":
         real_users = await digital_botz.total_users_count()
@@ -246,7 +246,7 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.BOT_STATUS.format(uptime, total_users, total_premium_users, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]]), style=ButtonStyle.DANGER) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
       
     elif data == "live_status":
         currentTime = get_uptime(client.uptime)
@@ -262,7 +262,7 @@ async def cb_handler(client, query: CallbackQuery):
         await query.message.edit_text(
             text=rkn.LIVE_STATUS.format(currentTime, cpu_usage, ram_usage, total_h, used_h, disk_usage, free_h, sent, recv),
             disable_web_page_preview=True,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about")]]), style=ButtonStyle.DANGER) 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "about", style=ButtonStyle.DANGER)]]), style=ButtonStyle.DANGER) 
       
     elif data == "source_code":
         await query.message.edit_text(text=rkn.DEV_TXT, disable_web_page_preview=True,
