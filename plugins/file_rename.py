@@ -82,7 +82,13 @@ def get_sort_key(item):
     try:
         msg_id = item['msg'].id
         file_val = getattr(item['msg'], item['msg'].media.value)
-        info = renamer.extract_all_info(file_val.file_name or "")
+        
+        # Merge filename and caption to ensure we don't miss metadata hidden in the caption
+        parse_text = file_val.file_name or ""
+        if item['msg'].caption:
+            parse_text += f" {item['msg'].caption}"
+            
+        info = renamer.extract_all_info(parse_text)
         s = int(info['season'].upper().replace("S", "")) if info.get('season') else 0
         e = int(info['episode'].upper().replace("E", "")) if info.get('episode') else 0
         return (s, e, msg_id)
@@ -455,7 +461,19 @@ async def download_worker(main_client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
 
-                info = renamer.extract_all_info(filename)
+                # Merge filename and caption to catch hidden metadata (like x265)
+                parse_text = filename
+                if message.caption:
+                    parse_text += f" {message.caption}"
+
+                info = renamer.extract_all_info(parse_text)
+                
+                # Protect the actual file extension strictly from the original file
+                if '.' in filename:
+                    info['extension'] = filename.rsplit('.', 1)[-1].lower()
+                else:
+                    info['extension'] = ""
+                
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
                 new_filename = renamer.apply_format_template(info, format_template)
