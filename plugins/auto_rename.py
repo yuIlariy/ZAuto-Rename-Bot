@@ -94,13 +94,13 @@ class EnhancedAutoRenamer:
         if quality_match:
             info['quality'] = quality_match.group(1)
         
-        # 5. Video codec
-        codec_match = re.search(r'(x264|x265|HEVC|H\.?264|H\.?265|AVC)', clean_name, re.IGNORECASE)
+        # 5. Video codec (Aggressively broadened to catch all variations)
+        codec_match = re.search(r'([hx]\.?26[456]|hevc|avc|av1|xvid|divx|mpeg|vp[89])', clean_name, re.IGNORECASE)
         if codec_match:
             info['video_codec'] = codec_match.group(1)
         
         # 6. Audio codec
-        audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS|Opus)', clean_name, re.IGNORECASE)
+        audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS|Opus|E-?AC-?3|FLAC|MP3)', clean_name, re.IGNORECASE)
         if audio_match:
             info['audio_codec'] = audio_match.group(1)
         
