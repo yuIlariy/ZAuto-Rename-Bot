@@ -94,11 +94,10 @@ class EnhancedAutoRenamer:
         if quality_match:
             info['quality'] = quality_match.group(1)
         
-        # 5. Video codec (Broadened to aggressively catch x265, HEVC, etc.)
-        codec_match = re.search(r'([hx]\s?\.?\s?26[456]|hevc|avc|av1|xvid|divx|mpeg|vp[89])', clean_name, re.IGNORECASE)
+        # 5. Video codec (Bulletproof literal search)
+        codec_match = re.search(r'(x26[456]|h26[456]|hevc|avc|av1|xvid|divx|mpeg|vp[89])', clean_name, re.IGNORECASE)
         if codec_match:
-            # Clean up formatting like 'x 265' or 'x.265' into standard 'x265'
-            info['video_codec'] = re.sub(r'[\s\.]', '', codec_match.group(1)).lower()
+            info['video_codec'] = codec_match.group(1).lower()
         
         # 6. Audio codec
         audio_match = re.search(r'(DD\+?5\.1|DDP?5\.1|DD5\.1|DD2\.0|AAC|AC3|DTS|Opus|E-?AC-?3|FLAC|MP3)', clean_name, re.IGNORECASE)
@@ -221,7 +220,6 @@ async def set_format_command(client: Client, message: Message):
     """Set auto rename format template"""
     user_id = message.from_user.id
     
-    # Check if the user passed a direct format via command (e.g. /autorename {title} {quality})
     if len(message.command) > 1:
         format_template = " ".join(message.command[1:])
         await digital_botz.add_user_format_template(user_id, format_template)
@@ -262,7 +260,6 @@ async def set_format_command(client: Client, message: Message):
 
 @Client.on_callback_query(filters.regex(r"^format_"), group=1)
 async def format_callback(client, callback_query):
-    # 1. Instantly unfreeze the button
     try:
         await callback_query.answer("Processing...", show_alert=False)
     except:
@@ -279,7 +276,6 @@ async def format_callback(client, callback_query):
             "format_doc": "{title} ({quality}).{ext}"
         }
         
-        # Handle standard button clicks
         if data in formats:
             await digital_botz.add_user_format_template(user_id, formats[data])
             try:
@@ -287,12 +283,9 @@ async def format_callback(client, callback_query):
                     f"✅ Format set to **{data.split('_')[1].title()}**!\n\n`{formats[data]}`"
                 )
             except MessageNotModified:
-                # User tapped the same button twice, silently ignore it
                 pass
                 
-        # Handle the Custom Format button specifically
         elif data == "format_custom":
-            # Store the guide message ID in memory to delete later
             custom_format_state[user_id] = callback_query.message.id
             await callback_query.message.reply_text(
                 "✍️ **Please send your custom format template below:**\n\n"
@@ -309,7 +302,6 @@ async def format_callback(client, callback_query):
 
 @Client.on_message(filters.reply & filters.text, group=1)
 async def save_custom_format(client: Client, message: Message):
-    """Save a custom format sent as a reply to the custom format prompt."""
     replied_message = message.reply_to_message
 
     if not replied_message or not replied_message.text:
@@ -325,13 +317,11 @@ async def save_custom_format(client: Client, message: Message):
     try:
         await digital_botz.add_user_format_template(message.from_user.id, format_template)
         
-        # Clean up: Delete the ForceReply prompt
         try:
             await replied_message.delete()
         except:
             pass
             
-        # Clean up: Delete the original guide message using the stored ID
         guide_msg_id = custom_format_state.pop(message.from_user.id, None)
         if guide_msg_id:
             try:
