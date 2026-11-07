@@ -89,10 +89,16 @@ class EnhancedAutoRenamer:
             if found_ep and found_ep != info['year']:
                 info['episode'] = f"E{found_ep.zfill(2)}"
 
-        # 4. Quality extraction
+        # 4. Quality extraction (Enforces lowercase 'p' and uppercase 'K')
         quality_match = re.search(r'(\d{3,4}[pP]|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
         if quality_match:
-            info['quality'] = quality_match.group(1)
+            q = quality_match.group(1)
+            if re.match(r'\d{3,4}[pP]', q):
+                info['quality'] = q.lower()
+            elif re.match(r'4[Kk]', q):
+                info['quality'] = '4K'
+            else:
+                info['quality'] = q
         
         # 5. Video codec (Bulletproof literal search)
         codec_match = re.search(r'(x26[456]|h26[456]|hevc|avc|av1|xvid|divx|mpeg|vp[89])', clean_name, re.IGNORECASE)
