@@ -20,6 +20,9 @@ from datetime import datetime
 import asyncio
 from helper.database import digital_botz
 
+# Track guide message IDs in memory to avoid restricted history scans
+custom_format_state = {}
+
 class EnhancedAutoRenamer:
     def __init__(self):
         self.renaming_operations = {} 
@@ -52,11 +55,19 @@ class EnhancedAutoRenamer:
         if year_match:
             info['year'] = year_match.group(1)
         
-        # 2. Season and Episode extraction
-        anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
-        if anime_match:
-            info['season'] = f"S{anime_match.group(1).zfill(2)}"
-            info['episode'] = f"E{anime_match.group(2).zfill(2)}"
+        # 2. Season and Episode extraction (Formats multi-episodes as E01&02)
+        multi_ep_match = re.search(r'[Ss](\d{1,2})[Ee](\d{1,4})(?:[Ee](\d{1,4}))+', clean_name)
+        if multi_ep_match:
+            info['season'] = f"S{multi_ep_match.group(1).zfill(2)}"
+            # Collect all episode groups matched
+            episodes = [group.zfill(2) for group in multi_ep_match.groups()[1:] if group]
+            # Format the first episode with 'E', and subsequent ones with '&'
+            info['episode'] = f"E{episodes[0]}" + "".join([f"&{ep}" for ep in episodes[1:]])
+        else:
+            anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
+            if anime_match:
+                info['season'] = f"S{anime_match.group(1).zfill(2)}"
+                info['episode'] = f"E{anime_match.group(2).zfill(2)}"
 
         if not info['episode']:
             s_e_match = re.search(r'[Ss](\d{1,2})(?:[Ee][Pp]?|\s+[Ee]?[Pp]?)\s*(\d{1,4})', clean_name)
@@ -280,7 +291,8 @@ async def format_callback(client, callback_query):
                 
         # Handle the Custom Format button specifically
         elif data == "format_custom":
-            await callback_query.message.delete()
+            # Store the guide message ID in memory to delete later
+            custom_format_state[user_id] = callback_query.message.id
             await callback_query.message.reply_text(
                 "✍️ **Please send your custom format template below:**\n\n"
                 "Example: `{title} - {quality} [{language}].{ext}`",
@@ -311,10 +323,24 @@ async def save_custom_format(client: Client, message: Message):
 
     try:
         await digital_botz.add_user_format_template(message.from_user.id, format_template)
+        
+        # Clean up: Delete the ForceReply prompt
+        try:
+            await replied_message.delete()
+        except:
+            pass
+            
+        # Clean up: Delete the original guide message using the stored ID
+        guide_msg_id = custom_format_state.pop(message.from_user.id, None)
+        if guide_msg_id:
+            try:
+                await client.delete_messages(message.chat.id, guide_msg_id)
+            except:
+                pass
+                
         await message.reply_text(
             f"✅ Format set to **Custom!**\n\n`{format_template}`"
         )
     except Exception as e:
         print(f"Custom Format Save Error: {e}")
         await message.reply_text(f"❌ Failed to save custom format: {str(e)}")
-
