@@ -78,7 +78,7 @@ async def custom_progress(current, total, text, message, start, task_id, filenam
 # --- SEQUENCE SORTER ---
 # ==========================================
 def get_sort_key(item):
-    """Extracts S/E, but uses Telegram Message ID as the ultimate sequential fallback for ANY file type."""
+    """Extracts Quality and S/E, prioritizing Quality (480p->720p->1080p), then S/E, then Message ID."""
     try:
         msg_id = item['msg'].id
         file_val = getattr(item['msg'], item['msg'].media.value)
@@ -89,11 +89,25 @@ def get_sort_key(item):
             parse_text += f" {item['msg'].caption}"
             
         info = renamer.extract_all_info(parse_text)
-        s = int(info['season'].upper().replace("S", "")) if info.get('season') else 0
-        e = int(info['episode'].upper().replace("E", "")) if info.get('episode') else 0
-        return (s, e, msg_id)
+        
+        # Quality Parsing for Sort Priority
+        q_str = info.get('quality', '').lower()
+        if '480' in q_str or 'sd' in q_str: q_val = 480
+        elif '720' in q_str or 'hd' in q_str: q_val = 720
+        elif '1080' in q_str or 'fhd' in q_str: q_val = 1080
+        elif '2160' in q_str or '4k' in q_str or 'uhd' in q_str: q_val = 2160
+        else: q_val = 9999  # Put unknown qualities at the end
+        
+        # Safe integer extraction for S/E (handles E01&02 correctly without crashing)
+        s_nums = re.findall(r'\d+', info.get('season', '0'))
+        s = int(s_nums[0]) if s_nums else 0
+        
+        e_nums = re.findall(r'\d+', info.get('episode', '0'))
+        e = int(e_nums[0]) if e_nums else 0
+        
+        return (q_val, s, e, msg_id)
     except Exception: 
-        return (float('inf'), float('inf'), item.get('msg').id if item.get('msg') else float('inf'))
+        return (9999, float('inf'), float('inf'), item.get('msg').id if item.get('msg') else float('inf'))
 
 # ==========================================
 # --- DYNAMIC ROTATIONAL LOAD BALANCER ---
