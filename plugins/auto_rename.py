@@ -27,8 +27,8 @@ class EnhancedAutoRenamer:
     def __init__(self):
         self.renaming_operations = {} 
         
-    def extract_all_info(self, filename: str) -> Dict:
-        """Extract all possible information from filename"""
+    def extract_all_info(self, filename: str, caption: str = "") -> Dict:
+        """Extract all possible information from filename and caption"""
         info = {
             'title': '',
             'year': '',
@@ -46,8 +46,12 @@ class EnhancedAutoRenamer:
             'extension': Path(filename).suffix.lstrip('.')
         }
         
-        # Clean filename for parsing
-        clean_name = re.sub(r'[_\.\[\]\(\)]', ' ', filename)
+        # Merge caption ONLY for metadata scanning (so {filename} remains pure)
+        search_text = filename
+        if caption:
+            search_text += f" {caption}"
+            
+        clean_name = re.sub(r'[_\.\[\]\(\)]', ' ', search_text)
         clean_name = re.sub(r'\s+', ' ', clean_name).strip()
         
         # 1. Year extraction
@@ -59,9 +63,7 @@ class EnhancedAutoRenamer:
         multi_ep_match = re.search(r'[Ss](\d{1,2})[Ee](\d{1,4})(?:[Ee](\d{1,4}))+', clean_name)
         if multi_ep_match:
             info['season'] = f"S{multi_ep_match.group(1).zfill(2)}"
-            # Collect all episode groups matched
             episodes = [group.zfill(2) for group in multi_ep_match.groups()[1:] if group]
-            # Format the first episode with 'E', and subsequent ones with '&'
             info['episode'] = f"E{episodes[0]}" + "".join([f"&{ep}" for ep in episodes[1:]])
         else:
             anime_match = re.search(r'[Ss](\d{1,2})\s*-\s*(\d{1,4})', clean_name)
@@ -71,9 +73,14 @@ class EnhancedAutoRenamer:
 
         if not info['episode']:
             s_e_match = re.search(r'[Ss](\d{1,2})(?:[Ee][Pp]?|\s+[Ee]?[Pp]?)\s*(\d{1,4})', clean_name)
+            x_match = re.search(r'\b(\d{1,2})[xX](\d{1,4})\b', clean_name)
+            
             if s_e_match:
                 info['season'] = f"S{s_e_match.group(1).zfill(2)}"
                 info['episode'] = f"E{s_e_match.group(2).zfill(2)}"
+            elif x_match:
+                info['season'] = f"S{x_match.group(1).zfill(2)}"
+                info['episode'] = f"E{x_match.group(2).zfill(2)}"
         
         if not info['season']:
             season_match = re.search(r'[Ss]eason\s*(\d{1,2})', clean_name, re.IGNORECASE)
@@ -129,6 +136,7 @@ class EnhancedAutoRenamer:
         if 'hdr' in clean_name.lower(): info['hdr'] = 'HDR'
         
         # --- SUBTRACTIVE TITLE EXTRACTION ---
+        # Run subtraction ONLY on the original filename, ignoring the caption entirely!
         raw_title = filename
         
         # Remove Extension
@@ -159,6 +167,7 @@ class EnhancedAutoRenamer:
             if info['season']:
                 raw_title = re.sub(rf'\b[Ss]0*{s_num}\s*-\s*0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
                 raw_title = re.sub(rf'\b[Ss]0*{s_num}\s*[Ee][Pp]?\s*0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
+                raw_title = re.sub(rf'\b0*{s_num}[xX]0*{e_num}\b', '', raw_title, flags=re.IGNORECASE)
             raw_title = re.sub(rf'\b0*{e_num}\b', '', raw_title)
 
         # Subtract all found tags
