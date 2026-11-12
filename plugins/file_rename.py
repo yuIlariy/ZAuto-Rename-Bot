@@ -78,17 +78,13 @@ async def custom_progress(current, total, text, message, start, task_id, filenam
 # --- SEQUENCE SORTER ---
 # ==========================================
 def get_sort_key(item):
-    """Extracts Quality and S/E, prioritizing Quality (480p->720p->1080p), then S/E, then Message ID."""
+    """Extracts Season, Quality, and Episode, prioritizing Season -> Quality (480p->720p->1080p) -> Episode -> Msg ID."""
     try:
         msg_id = item['msg'].id
         file_val = getattr(item['msg'], item['msg'].media.value)
         
-        # Merge filename and caption to ensure we don't miss metadata hidden in the caption
-        parse_text = file_val.file_name or ""
-        if item['msg'].caption:
-            parse_text += f" {item['msg'].caption}"
-            
-        info = renamer.extract_all_info(parse_text)
+        # Extract metadata properly without destroying the actual filename string
+        info = renamer.extract_all_info(file_val.file_name or "", item['msg'].caption or "")
         
         # Quality Parsing for Sort Priority
         q_str = info.get('quality', '').lower()
@@ -105,9 +101,9 @@ def get_sort_key(item):
         e_nums = re.findall(r'\d+', info.get('episode', '0'))
         e = int(e_nums[0]) if e_nums else 0
         
-        return (q_val, s, e, msg_id)
+        return (s, q_val, e, msg_id)
     except Exception: 
-        return (9999, float('inf'), float('inf'), item.get('msg').id if item.get('msg') else float('inf'))
+        return (float('inf'), 9999, float('inf'), item.get('msg').id if item.get('msg') else float('inf'))
 
 # ==========================================
 # --- DYNAMIC ROTATIONAL LOAD BALANCER ---
@@ -475,18 +471,8 @@ async def download_worker(main_client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
 
-                # Merge filename and caption to catch hidden metadata (like x265)
-                parse_text = filename
-                if message.caption:
-                    parse_text += f" {message.caption}"
-
-                info = renamer.extract_all_info(parse_text)
-                
-                # Protect the actual file extension strictly from the original file
-                if '.' in filename:
-                    info['extension'] = filename.rsplit('.', 1)[-1].lower()
-                else:
-                    info['extension'] = ""
+                # Send filename and caption as separate inputs so {filename} remains pure
+                info = renamer.extract_all_info(filename, message.caption or "")
                 
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
