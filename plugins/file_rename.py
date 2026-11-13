@@ -83,18 +83,15 @@ def get_sort_key(item):
         msg_id = item['msg'].id
         file_val = getattr(item['msg'], item['msg'].media.value)
         
-        # Extract metadata properly without destroying the actual filename string
         info = renamer.extract_all_info(file_val.file_name or "", item['msg'].caption or "")
         
-        # Quality Parsing for Sort Priority
         q_str = info.get('quality', '').lower()
         if '480' in q_str or 'sd' in q_str: q_val = 480
         elif '720' in q_str or 'hd' in q_str: q_val = 720
         elif '1080' in q_str or 'fhd' in q_str: q_val = 1080
         elif '2160' in q_str or '4k' in q_str or 'uhd' in q_str: q_val = 2160
-        else: q_val = 9999  # Put unknown qualities at the end
+        else: q_val = 9999
         
-        # Safe integer extraction for S/E (handles E01&02 correctly without crashing)
         s_nums = re.findall(r'\d+', info.get('season', '0'))
         s = int(s_nums[0]) if s_nums else 0
         
@@ -109,7 +106,7 @@ def get_sort_key(item):
 # --- DYNAMIC ROTATIONAL LOAD BALANCER ---
 # ==========================================
 worker_loads = {}
-last_worker_index = -1  # Remembers who took the last job
+last_worker_index = -1
 
 def get_least_busy_worker(main_client):
     global last_worker_index
@@ -141,7 +138,6 @@ def get_least_busy_worker(main_client):
 # --- SAFE DELETE TRACKER ---
 # ==========================================
 async def safe_delete_task(task_id, user_id, client):
-    """Unconditionally hunts down and deletes the processing message from chat and log channel before wiping DB record."""
     try:
         raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
         if raw_task:
@@ -161,7 +157,7 @@ async def safe_delete_task(task_id, user_id, client):
     await digital_botz.delete_task(task_id)
 
 # ==========================================
-# --- QUEUE MANAGER CLASS (BARRIER UPGRADE) ---
+# --- QUEUE MANAGER CLASS ---
 # ==========================================
 class QueueManager:
     def __init__(self):
@@ -262,9 +258,6 @@ class QueueManager:
 
 manager = QueueManager()
 
-# ==========================================
-# --- REBOOT RESUME FUNCTION (CRASH PROOF) ---
-# ==========================================
 async def resume_all_tasks(client):
     print("🔄 Checking for incomplete tasks to resume...")
     try:
@@ -357,8 +350,6 @@ async def resume_all_tasks(client):
             
     except Exception as e:
         print(f"Error in resume_all_tasks: {e}")
-
-# ==========================================
 
 @Client.on_message(filters.private & (filters.audio | filters.document | filters.video))
 async def rename_start(client, message):
@@ -471,14 +462,20 @@ async def download_worker(main_client, user_id):
                 filename = rkn_file.file_name or "unknown_file"
                 filesize = humanbytes(rkn_file.file_size)
 
-                # Send filename and caption as separate inputs so {filename} remains pure
                 info = renamer.extract_all_info(filename, message.caption or "")
                 
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
-                new_filename = renamer.apply_format_template(info, format_template)
                 
-                new_filename = str(new_filename).replace("/", "-").replace("\\", "-")
+                # Retrieve the original formatting strictly for the caption
+                formatted_name = renamer.apply_format_template(info, format_template)
+                
+                # --- APPLY TELEGRAM UNDERSCORE SANITIZATION FOR THE ACTUAL DISK FILENAME ---
+                new_filename = str(formatted_name).replace("[", "").replace("]", "")
+                new_filename = re.sub(r'\s+', '_', new_filename)
+                new_filename = new_filename.replace("__", "_").strip("_")
+                new_filename = new_filename.replace("/", "-").replace("\\", "-")
+                
                 if not new_filename.endswith(f".{info['extension']}"):
                     new_filename += f".{info['extension']}"
                 
@@ -604,7 +601,9 @@ async def download_worker(main_client, user_id):
                 ph_path = None
                 c_caption = user_data.get('caption', None)
                 c_thumb = user_data.get('file_id', None)
-                caption = c_caption.format(filename=new_filename, filesize=filesize, duration=convert(duration)) if c_caption else f"**{new_filename}**"
+                
+                # --- The caption retains the fully formatted name (with brackets and spaces) ---
+                caption = c_caption.format(filename=formatted_name, filesize=filesize, duration=convert(duration)) if c_caption else f"**{formatted_name}**"
                 
                 if c_thumb:
                     ph_path = await main_client.download_media(c_thumb)
@@ -936,7 +935,6 @@ async def upload_worker(main_client, user_id):
         except: pass
             
         manager.cleanup(user_id)
-
 
 async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename, task_id):
     try:
