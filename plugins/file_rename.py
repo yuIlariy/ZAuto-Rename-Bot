@@ -467,13 +467,12 @@ async def download_worker(main_client, user_id):
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
                 
-                # Retrieve the original formatting strictly for the caption
+                # --- The fully formatted name with brackets (For Caption Only) ---
                 formatted_name = renamer.apply_format_template(info, format_template)
                 
-                # --- APPLY TELEGRAM UNDERSCORE SANITIZATION FOR THE ACTUAL DISK FILENAME ---
+                # --- The sanitized filename for the actual file (No Brackets, No Underscores, Just Spaces) ---
                 new_filename = str(formatted_name).replace("[", "").replace("]", "")
-                new_filename = re.sub(r'\s+', '_', new_filename)
-                new_filename = new_filename.replace("__", "_").strip("_")
+                new_filename = re.sub(r'\s+', ' ', new_filename).strip()
                 new_filename = new_filename.replace("/", "-").replace("\\", "-")
                 
                 if not new_filename.endswith(f".{info['extension']}"):
@@ -602,7 +601,7 @@ async def download_worker(main_client, user_id):
                 c_caption = user_data.get('caption', None)
                 c_thumb = user_data.get('file_id', None)
                 
-                # --- The caption retains the fully formatted name (with brackets and spaces) ---
+                # Apply the completely unmodified template (with brackets) to the caption
                 caption = c_caption.format(filename=formatted_name, filesize=filesize, duration=convert(duration)) if c_caption else f"**{formatted_name}**"
                 
                 if c_thumb:
