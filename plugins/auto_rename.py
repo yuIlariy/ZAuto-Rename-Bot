@@ -96,14 +96,23 @@ class EnhancedAutoRenamer:
             if found_ep and found_ep != info['year']:
                 info['episode'] = f"E{found_ep.zfill(2)}"
 
-        # 4. Quality extraction (Enforces lowercase 'p' and uppercase 'K')
-        quality_match = re.search(r'(\d{3,4}[pP]|4[Kk]|UHD|HD|SD|HDRip|WEBRip|BluRay)', clean_name, re.IGNORECASE)
+        # 4. Quality extraction (Enforces exact casing for HDRip, WEBRip, BluRay)
+        quality_match = re.search(r'(\d{3,4}[pP]|4[Kk]|UHD|HDRip|WEBRip|BluRay|HD|SD)', clean_name, re.IGNORECASE)
         if quality_match:
             q = quality_match.group(1)
+            q_lower = q.lower()
             if re.match(r'\d{3,4}[pP]', q):
-                info['quality'] = q.lower()
+                info['quality'] = q_lower
             elif re.match(r'4[Kk]', q):
                 info['quality'] = '4K'
+            elif q_lower == 'hdrip':
+                info['quality'] = 'HDRip'
+            elif q_lower == 'webrip':
+                info['quality'] = 'WEBRip'
+            elif q_lower == 'bluray':
+                info['quality'] = 'BluRay'
+            elif q_lower in ['hd', 'sd', 'uhd']:
+                info['quality'] = q.upper()
             else:
                 info['quality'] = q
         
