@@ -467,12 +467,20 @@ async def download_worker(main_client, user_id):
                 user_data = await digital_botz.get_user_data(user_id)
                 format_template = user_data.get('format_template', "{filename}")
                 
-                # --- The fully formatted name with brackets (For Caption Only) ---
+                # --- The fully formatted name (Retained exactly for Caption) ---
                 formatted_name = renamer.apply_format_template(info, format_template)
                 
-                # --- The sanitized filename for the actual file (No Brackets, No Underscores, Just Spaces) ---
-                new_filename = str(formatted_name).replace("[", "").replace("]", "")
-                new_filename = re.sub(r'\s+', ' ', new_filename).strip()
+                # --- Actual File Name: Replace [] with underscores if present; otherwise keep exact format ---
+                raw_name = str(formatted_name)
+                if "[" in raw_name or "]" in raw_name:
+                    new_filename = raw_name.replace("[", "_").replace("]", "_")
+                    new_filename = re.sub(r'\s*_\s*', '_', new_filename)
+                    new_filename = re.sub(r'_+', '_', new_filename)
+                    new_filename = re.sub(r'_+\.', '.', new_filename)
+                    new_filename = new_filename.strip("_ ")
+                else:
+                    new_filename = raw_name.strip()
+                
                 new_filename = new_filename.replace("/", "-").replace("\\", "-")
                 
                 if not new_filename.endswith(f".{info['extension']}"):
