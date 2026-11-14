@@ -470,12 +470,11 @@ async def download_worker(main_client, user_id):
                 # --- The fully formatted name (Retained exactly for Caption) ---
                 formatted_name = renamer.apply_format_template(info, format_template)
                 
-                # --- Actual File Name: Replace [] with underscores if present; otherwise keep exact format ---
+                # --- Actual File Name: Replace [] and spaces with underscores if brackets are present; otherwise keep exact format ---
                 raw_name = str(formatted_name)
                 if "[" in raw_name or "]" in raw_name:
                     new_filename = raw_name.replace("[", "_").replace("]", "_")
-                    new_filename = re.sub(r'\s*_\s*', '_', new_filename)
-                    new_filename = re.sub(r'_+', '_', new_filename)
+                    new_filename = re.sub(r'[\s_]+', '_', new_filename)
                     new_filename = re.sub(r'_+\.', '.', new_filename)
                     new_filename = new_filename.strip("_ ")
                 else:
