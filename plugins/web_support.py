@@ -11,6 +11,7 @@ Copyright (c) 2025 @Digital_Botz
 """
 
 from aiohttp import web
+from datetime import datetime, timezone, timedelta
 import time
 import psutil
 import shutil
@@ -46,12 +47,48 @@ _db_cache = {
     "net_stats": {"sent": 0, "recv": 0}
 }
 
+# --- PERSISTENT 7-DAY ANALYTICS ROLLUP BUFFER & CACHE ---
+_rollup_buffer = {
+    "daily": {},   # { "YYYY-MM-DD": {"renames": int, "bytes": int, "peak": int} }
+    "hourly": {}   # { "YYYY-MM-DDTHH": {"renames": int, "bytes": int, "peak": int} }
+}
+
+_analytics_cache = {
+    "timestamp": 0.0,
+    "ttl": 15.0,
+    "data": None
+}
+
+
+def _utc_keys(now_dt=None):
+    dt = now_dt or datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m-%dT%H")
+
+
+def record_rename_event(size_bytes: int):
+    """Buffers a completed rename into in-memory hourly/daily rollup counters."""
+    try:
+        day_key, hour_key = _utc_keys()
+        safe_bytes = max(0, int(size_bytes or 0))
+
+        d_entry = _rollup_buffer["daily"].setdefault(day_key, {"renames": 0, "bytes": 0, "peak": 0})
+        d_entry["renames"] += 1
+        d_entry["bytes"] += safe_bytes
+
+        h_entry = _rollup_buffer["hourly"].setdefault(hour_key, {"renames": 0, "bytes": 0, "peak": 0})
+        h_entry["renames"] += 1
+        h_entry["bytes"] += safe_bytes
+    except Exception:
+        pass
+
+
 # ⚠️ INVISIBLE HOOK: Intercept successful uploads without modifying file_rename.py
 if not hasattr(digital_botz, "_limit_is_hooked"):
     original_update_limit = digital_botz.update_daily_limit
 
     async def hooked_update_limit(user_id, size):
         await digital_botz.increment_total_renames()  # Saves to DB exactly once
+        record_rename_event(size)
         return await original_update_limit(user_id, size)  # Pass back to DB normally
 
     digital_botz.update_daily_limit = hooked_update_limit
@@ -181,6 +218,207 @@ def format_eta(current_str, total_str, speed_str):
         return f"{mins}m {secs:02d}s"
     hrs, mins = divmod(mins, 60)
     return f"{hrs}h {mins:02d}m"
+
+
+def _sample_active_tasks_count() -> int:
+    """Reads live active pipeline task count safely."""
+    try:
+        from plugins import file_rename
+        active_progress = getattr(file_rename, "active_progress", {})
+        manager = getattr(file_rename, "manager", None)
+        count = len(active_progress)
+        if count == 0 and manager:
+            for dl_list in getattr(manager, "active_downloads", {}).values():
+                count += len(dl_list)
+            for ul_list in getattr(manager, "staging_pool", {}).values():
+                count += len(ul_list)
+        return int(count)
+    except Exception:
+        return 0
+
+
+async def flush_analytics_rollups():
+    """Flushes buffered hourly and daily analytics rollups to MongoDB."""
+    if not hasattr(digital_botz, "db"):
+        return
+
+    now_dt = datetime.now(timezone.utc)
+    daily_col = digital_botz.db["analytics_daily"]
+    hourly_col = digital_botz.db["analytics_hourly"]
+
+    # Snapshot & swap buffers atomically
+    daily_snapshot = _rollup_buffer["daily"]
+    hourly_snapshot = _rollup_buffer["hourly"]
+    _rollup_buffer["daily"] = {}
+    _rollup_buffer["hourly"] = {}
+
+    for day_key, vals in daily_snapshot.items():
+        if vals["renames"] == 0 and vals["bytes"] == 0 and vals["peak"] == 0:
+            continue
+        try:
+            await daily_col.update_one(
+                {"_id": day_key},
+                {
+                    "$inc": {
+                        "renames_count": vals["renames"],
+                        "bytes_transferred": vals["bytes"]
+                    },
+                    "$max": {
+                        "peak_active_tasks": vals["peak"]
+                    },
+                    "$set": {
+                        "date": day_key,
+                        "updated_at": now_dt
+                    }
+                },
+                upsert=True
+            )
+            doc = await daily_col.find_one({"_id": day_key})
+            if doc:
+                gb_val = round(float(doc.get("bytes_transferred", 0)) / (1024 ** 3), 3)
+                await daily_col.update_one({"_id": day_key}, {"$set": {"gb_transferred": gb_val}})
+        except Exception:
+            # Re-queue failed delta so no stats are lost on transient DB errors
+            cur = _rollup_buffer["daily"].setdefault(day_key, {"renames": 0, "bytes": 0, "peak": 0})
+            cur["renames"] += vals["renames"]
+            cur["bytes"] += vals["bytes"]
+            cur["peak"] = max(cur["peak"], vals["peak"])
+
+    for hour_key, vals in hourly_snapshot.items():
+        if vals["renames"] == 0 and vals["bytes"] == 0 and vals["peak"] == 0:
+            continue
+        try:
+            await hourly_col.update_one(
+                {"_id": hour_key},
+                {
+                    "$inc": {
+                        "renames_count": vals["renames"],
+                        "bytes_transferred": vals["bytes"]
+                    },
+                    "$max": {
+                        "peak_active_tasks": vals["peak"]
+                    },
+                    "$set": {
+                        "hour": hour_key,
+                        "updated_at": now_dt
+                    }
+                },
+                upsert=True
+            )
+            doc = await hourly_col.find_one({"_id": hour_key})
+            if doc:
+                gb_val = round(float(doc.get("bytes_transferred", 0)) / (1024 ** 3), 3)
+                await hourly_col.update_one({"_id": hour_key}, {"$set": {"gb_transferred": gb_val}})
+        except Exception:
+            cur = _rollup_buffer["hourly"].setdefault(hour_key, {"renames": 0, "bytes": 0, "peak": 0})
+            cur["renames"] += vals["renames"]
+            cur["bytes"] += vals["bytes"]
+            cur["peak"] = max(cur["peak"], vals["peak"])
+
+
+async def _analytics_rollup_loop():
+    """Lightweight background task sampling peak tasks every 5s and flushing MongoDB rollups every 30s."""
+    last_flush = time.time()
+    last_prune = 0.0
+
+    while True:
+        try:
+            await asyncio.sleep(5.0)
+            active_now = _sample_active_tasks_count()
+            day_key, hour_key = _utc_keys()
+
+            d_entry = _rollup_buffer["daily"].setdefault(day_key, {"renames": 0, "bytes": 0, "peak": 0})
+            if active_now > d_entry["peak"]:
+                d_entry["peak"] = active_now
+
+            h_entry = _rollup_buffer["hourly"].setdefault(hour_key, {"renames": 0, "bytes": 0, "peak": 0})
+            if active_now > h_entry["peak"]:
+                h_entry["peak"] = active_now
+
+            now = time.time()
+            if now - last_flush >= 30.0:
+                await flush_analytics_rollups()
+                last_flush = now
+                _analytics_cache["timestamp"] = 0.0  # Invalidate 7d cache after flush
+
+            # Prune hourly documents older than 8 days once per hour
+            if now - last_prune >= 3600.0 and hasattr(digital_botz, "db"):
+                try:
+                    cutoff = (datetime.now(timezone.utc) - timedelta(days=8)).strftime("%Y-%m-%dT%H")
+                    await digital_botz.db["analytics_hourly"].delete_many({"_id": {"$lt": cutoff}})
+                except Exception:
+                    pass
+                last_prune = now
+
+        except asyncio.CancelledError:
+            await flush_analytics_rollups()
+            break
+        except Exception:
+            await asyncio.sleep(5.0)
+
+
+async def get_7d_analytics():
+    """Returns 7-day daily rollup series (renames_count, gb_transferred, peak_active_tasks) with 15s cache."""
+    now_ts = time.time()
+    if _analytics_cache["data"] is not None and (now_ts - _analytics_cache["timestamp"]) < _analytics_cache["ttl"]:
+        return _analytics_cache["data"]
+
+    now_dt = datetime.now(timezone.utc)
+    day_keys = [(now_dt - timedelta(days=offset)).strftime("%Y-%m-%d") for offset in range(6, -1, -1)]
+    docs_by_day = {}
+
+    if hasattr(digital_botz, "db"):
+        try:
+            cursor = digital_botz.db["analytics_daily"].find({"_id": {"$in": day_keys}})
+            async for doc in cursor:
+                docs_by_day[doc["_id"]] = doc
+        except Exception:
+            pass
+
+    days_list = []
+    total_renames_7d = 0
+    total_bytes_7d = 0
+    peak_tasks_7d = 0
+
+    for idx, d_key in enumerate(day_keys):
+        db_doc = docs_by_day.get(d_key, {})
+        pending = _rollup_buffer["daily"].get(d_key, {"renames": 0, "bytes": 0, "peak": 0})
+
+        renames_count = int(db_doc.get("renames_count", 0)) + int(pending.get("renames", 0))
+        bytes_transferred = int(db_doc.get("bytes_transferred", 0)) + int(pending.get("bytes", 0))
+        gb_transferred = round(bytes_transferred / (1024 ** 3), 2)
+        peak_active_tasks = max(int(db_doc.get("peak_active_tasks", 0)), int(pending.get("peak", 0)))
+
+        dt_obj = datetime.strptime(d_key, "%Y-%m-%d")
+        short_label = "Today" if idx == 6 else dt_obj.strftime("%b %d")
+
+        total_renames_7d += renames_count
+        total_bytes_7d += bytes_transferred
+        if peak_active_tasks > peak_tasks_7d:
+            peak_tasks_7d = peak_active_tasks
+
+        days_list.append({
+            "date": d_key,
+            "label": short_label,
+            "renames_count": renames_count,
+            "gb_transferred": gb_transferred,
+            "bytes_transferred": bytes_transferred,
+            "peak_active_tasks": peak_active_tasks
+        })
+
+    result = {
+        "days": days_list,
+        "summary": {
+            "total_renames": total_renames_7d,
+            "total_renames_short": format_short_number(total_renames_7d),
+            "total_gb": round(total_bytes_7d / (1024 ** 3), 2),
+            "peak_active_tasks": peak_tasks_7d
+        }
+    }
+
+    _analytics_cache["data"] = result
+    _analytics_cache["timestamp"] = now_ts
+    return result
 
 
 async def get_cached_db_metrics():
@@ -467,6 +705,12 @@ async def api_queue_handler(request):
     return web.json_response(get_queue_data())
 
 
+@DigitalAutoRenameBot.get("/api/analytics/7d")
+async def api_analytics_7d_handler(request):
+    analytics_data = await get_7d_analytics()
+    return web.json_response(analytics_data)
+
+
 @DigitalAutoRenameBot.post("/api/admin/verify")
 async def api_admin_verify_handler(request):
     """Verifies Telegram Mini App initData and unlocks admin UI if user is in Config.ADMIN."""
@@ -589,7 +833,7 @@ async def api_admin_action_handler(request):
 
 @DigitalAutoRenameBot.get("/api/stream")
 async def api_stream_handler(request):
-    """Unified Server-Sent Events (SSE) endpoint pushing live status & queue telemetry."""
+    """Unified Server-Sent Events (SSE) endpoint pushing live status, queue & 7-day analytics telemetry."""
     response = web.StreamResponse(
         status=200,
         reason='OK',
@@ -606,9 +850,11 @@ async def api_stream_handler(request):
         while True:
             status_data = await get_status()
             queue_data = get_queue_data()
+            analytics_data = await get_7d_analytics()
             payload = {
                 "status": status_data,
-                "queue": queue_data
+                "queue": queue_data,
+                "analytics_7d": analytics_data
             }
             chunk = f"data: {json.dumps(payload)}\n\n".encode("utf-8")
             await response.write(chunk)
@@ -622,7 +868,24 @@ async def api_stream_handler(request):
     return response
 
 
+async def _on_startup_analytics(app):
+    app["analytics_rollup_task"] = asyncio.create_task(_analytics_rollup_loop())
+
+
+async def _on_cleanup_analytics(app):
+    task = app.get("analytics_rollup_task")
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    await flush_analytics_rollups()
+
+
 async def web_server():
     web_app = web.Application(client_max_size=30000000)
     web_app.add_routes(DigitalAutoRenameBot)
+    web_app.on_startup.append(_on_startup_analytics)
+    web_app.on_cleanup.append(_on_cleanup_analytics)
     return web_app
