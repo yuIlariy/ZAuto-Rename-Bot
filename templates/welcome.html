@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto Digitals — Telemetry & Command Console</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -96,7 +97,7 @@
             max-width: 1240px;
             width: 100%;
             margin: 0 auto;
-            padding: 2.25rem 2rem 1.25rem;
+            padding: 2rem 2rem 1.15rem;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -165,12 +166,6 @@
             color: var(--warning);
         }
 
-        .stream-pill.offline {
-            background: rgba(239, 68, 68, 0.12);
-            border-color: rgba(239, 68, 68, 0.3);
-            color: var(--danger);
-        }
-
         .pulse-dot {
             width: 8px;
             height: 8px;
@@ -192,6 +187,108 @@
             border: 1px solid var(--border-color);
             padding: 0.45rem 0.75rem;
             border-radius: 10px;
+        }
+
+        /* --- Telegram Mini App Admin Command Bar --- */
+        .admin-bar-wrapper {
+            max-width: 1240px;
+            width: 100%;
+            margin: 0 auto 0.75rem;
+            padding: 0 2rem;
+            display: none;
+        }
+
+        .admin-bar {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.9));
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(96, 165, 250, 0.35);
+            border-radius: 16px;
+            padding: 0.9rem 1.25rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.85rem;
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.12);
+        }
+
+        .admin-identity {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #93c5fd;
+        }
+
+        .admin-badge {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(96, 165, 250, 0.4);
+            color: #60a5fa;
+            padding: 0.2rem 0.55rem;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .admin-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .admin-btn {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.5rem 0.9rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+            background: rgba(2, 6, 23, 0.7);
+        }
+
+        .admin-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .admin-btn.purge {
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.12);
+        }
+        .admin-btn.purge:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.24);
+        }
+
+        .admin-btn.heal {
+            border-color: rgba(16, 185, 129, 0.35);
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.12);
+        }
+        .admin-btn.heal:hover:not(:disabled) {
+            background: rgba(16, 185, 129, 0.24);
+        }
+
+        .admin-btn.pause {
+            border-color: rgba(245, 158, 11, 0.35);
+            color: #fcd34d;
+            background: rgba(245, 158, 11, 0.12);
+        }
+        .admin-btn.pause:hover:not(:disabled) {
+            background: rgba(245, 158, 11, 0.24);
+        }
+
+        .admin-btn.paused-active {
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #ffffff;
+            background: rgba(239, 68, 68, 0.28);
         }
 
         /* --- Bento Grid Dashboard --- */
@@ -265,6 +362,12 @@
             display: inline-flex;
             align-items: center;
             gap: 0.45rem;
+        }
+
+        .status-badge.paused {
+            background: rgba(245, 158, 11, 0.14);
+            color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.35);
         }
 
         /* --- Stat Blocks --- */
@@ -485,17 +588,17 @@
             border: 1px solid var(--border-color);
             border-radius: 14px;
             padding: 1.15rem;
-            max-height: 420px;
+            max-height: 460px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.8rem;
             box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.65);
         }
 
         .q-item {
             background: rgba(15, 23, 42, 0.65);
-            border: 1px solid rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.12);
             border-radius: 12px;
             padding: 0.95rem 1.1rem;
             display: flex;
@@ -505,22 +608,22 @@
         }
 
         .q-item:hover {
-            border-color: rgba(148, 163, 184, 0.25);
+            border-color: rgba(148, 163, 184, 0.28);
         }
 
         .q-top {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 0.75rem;
+            gap: 0.6rem;
         }
 
-        .q-title-wrap {
+        .q-badges {
             display: flex;
             align-items: center;
-            gap: 0.6rem;
+            flex-wrap: wrap;
+            gap: 0.45rem;
             min-width: 0;
-            flex: 1;
         }
 
         .q-tag {
@@ -551,12 +654,40 @@
             border: 1px solid rgba(245, 158, 11, 0.28);
         }
 
+        .q-ext-pill {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #fde68a;
+            background: rgba(245, 158, 11, 0.14);
+            border: 1px solid rgba(245, 158, 11, 0.32);
+            padding: 0.16rem 0.48rem;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+
+        .q-worker-pill {
+            font-size: 0.65rem;
+            color: #93c5fd;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            padding: 0.16rem 0.48rem;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+
         .q-filename {
             font-size: 0.84rem;
+            font-weight: 500;
             color: var(--text-primary);
-            white-space: nowrap;
+            line-height: 1.4;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .q-pct {
@@ -630,7 +761,7 @@
 
         .node-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
             gap: 0.85rem;
         }
 
@@ -642,11 +773,16 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            transition: border-color 0.25s ease;
         }
 
         .node-card.rate-limited {
-            border-color: rgba(239, 68, 68, 0.35);
-            background: rgba(239, 68, 68, 0.05);
+            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.06);
+        }
+
+        .node-card.busy-node {
+            border-color: rgba(59, 130, 246, 0.35);
         }
 
         .node-top {
@@ -668,7 +804,7 @@
         .node-status {
             font-size: 0.68rem;
             font-weight: 700;
-            padding: 0.15rem 0.5rem;
+            padding: 0.15rem 0.55rem;
             border-radius: 999px;
             flex-shrink: 0;
         }
@@ -684,15 +820,27 @@
         }
 
         .node-status.limited {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
+            background: rgba(239, 68, 68, 0.18);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.35);
         }
 
         .node-meta {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             font-size: 0.72rem;
             color: var(--text-secondary);
+        }
+
+        .node-speed {
+            font-weight: 600;
+            color: #a7f3d0;
+        }
+
+        .node-speed.idle-speed {
+            color: var(--text-muted);
+            font-weight: 400;
         }
 
         .node-bar {
@@ -707,6 +855,10 @@
             background: var(--accent-blue);
             border-radius: 999px;
             transition: width 0.3s ease;
+        }
+
+        .node-bar-fill.limited-bar {
+            background: var(--danger);
         }
 
         /* --- Hardware Meters --- */
@@ -853,7 +1005,7 @@
         }
 
         @media (max-width: 640px) {
-            header, .dashboard {
+            header, .dashboard, .admin-bar-wrapper {
                 padding-left: 1.15rem;
                 padding-right: 1.15rem;
             }
@@ -865,6 +1017,16 @@
             }
             .actions {
                 flex-direction: column;
+            }
+            .admin-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .admin-actions {
+                flex-direction: column;
+            }
+            .admin-btn {
+                justify-content: center;
             }
         }
     </style>
@@ -899,13 +1061,34 @@
         </div>
     </header>
 
+    <!-- Telegram Mini App Authenticated Admin Command Bar -->
+    <div class="admin-bar-wrapper" id="admin-bar-wrapper">
+        <div class="admin-bar">
+            <div class="admin-identity">
+                <span class="admin-badge"><i class="fas fa-shield-halved"></i> Admin Console</span>
+                <span id="admin-greeting">Authenticated via Telegram</span>
+            </div>
+            <div class="admin-actions">
+                <button class="admin-btn purge" id="btn-purge-queue" onclick="triggerAdminAction('purge_queue')">
+                    <i class="fas fa-broom"></i> Purge Stuck Queue
+                </button>
+                <button class="admin-btn heal" id="btn-heal-workers" onclick="triggerAdminAction('heal_workers')">
+                    <i class="fas fa-heart-pulse"></i> Force-Heal Nodes
+                </button>
+                <button class="admin-btn pause" id="btn-toggle-pause" onclick="triggerAdminAction('toggle_pause')">
+                    <i class="fas fa-pause"></i> <span id="pause-btn-label">Pause Intake</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <main class="dashboard">
 
         <!-- Core Engine Card -->
         <div class="card card-bot">
             <div class="card-header">
                 <span class="card-title"><i class="fas fa-microchip"></i> Core Engine</span>
-                <div class="status-badge">
+                <div class="status-badge" id="engine-status-badge">
                     <span class="pulse-dot"></span>
                     <span id="val-bot_status">{{bot_status}}</span>
                 </div>
@@ -1125,6 +1308,89 @@
         let latestQueueData = { uploading: [], downloading: [], pending: [] };
         let prevActiveTasks = null;
         let prevHealthyWorkers = null;
+        let tmaInitData = '';
+
+        // --- Initialize Telegram Mini App Auth ---
+        async function initTelegramMiniApp() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+
+            tg.ready();
+            tg.expand();
+
+            if (!tg.initData) return;
+            tmaInitData = tg.initData;
+
+            try {
+                const res = await fetch('/api/admin/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `tma ${tmaInitData}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.authorized) {
+                    const wrapper = document.getElementById('admin-bar-wrapper');
+                    wrapper.style.display = 'block';
+                    const name = data.user?.first_name || 'Admin';
+                    document.getElementById('admin-greeting').innerText = `Welcome, ${name}`;
+                }
+            } catch (err) {
+                console.error('TMA auth check failed:', err);
+            }
+        }
+
+        // --- Execute Authenticated Admin Action ---
+        async function triggerAdminAction(action) {
+            if (!tmaInitData) return;
+
+            const confirmMessages = {
+                purge_queue: 'Purge all stuck/pending tasks from the queue? Active downloads and uploads will continue uninterrupted.',
+                heal_workers: 'Reset FloodWait cooldowns and reconnect all worker nodes?',
+                toggle_pause: 'Toggle batch intake pause/drain mode?'
+            };
+
+            const proceed = await new Promise((resolve) => {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (tg && typeof tg.showConfirm === 'function') {
+                    tg.showConfirm(confirmMessages[action] || 'Confirm admin action?', (ok) => resolve(ok));
+                } else {
+                    resolve(window.confirm(confirmMessages[action] || 'Confirm admin action?'));
+                }
+            });
+
+            if (!proceed) return;
+
+            const buttons = document.querySelectorAll('.admin-btn');
+            buttons.forEach(b => b.disabled = true);
+
+            try {
+                const res = await fetch('/api/admin/action', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `tma ${tmaInitData}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action })
+                });
+
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    showToast(result.message || 'Action completed.', 'fa-check-circle', '#10b981');
+                    if (window.Telegram?.WebApp?.HapticFeedback) {
+                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+                    }
+                } else {
+                    showToast(result.error || 'Action failed.', 'fa-exclamation-circle', '#ef4444');
+                }
+            } catch (err) {
+                showToast('Network error executing admin action.', 'fa-exclamation-circle', '#ef4444');
+            } finally {
+                buttons.forEach(b => b.disabled = false);
+            }
+        }
 
         // --- Hide Loader ---
         window.addEventListener('load', () => {
@@ -1138,7 +1404,7 @@
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            toast.innerHTML = `<i class="fas ${iconClass}" style="color: ${color};"></i><span>${message}</span>`;
+            toast.innerHTML = `<i class="fas ${iconClass}" style="color: ${color};"></i><span>${escapeHtml(message)}</span>`;
             container.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = '0';
@@ -1155,6 +1421,27 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
+        }
+
+        // --- Brief Extension Badge Helper ---
+        function formatExtBadge(t) {
+            let ext = (t.extension || '').trim().toUpperCase();
+            if (!ext && t.filename && t.filename.includes('.')) {
+                const candidate = t.filename.split('.').pop().trim().toUpperCase();
+                if (candidate && candidate.length <= 8 && !candidate.includes(' ')) {
+                    ext = candidate;
+                }
+            }
+            return ext ? `<span class="q-ext-pill mono">${escapeHtml(ext)}</span>` : '';
+        }
+
+        // --- Format Cooldown Seconds ---
+        function formatCooldown(sec) {
+            if (sec <= 0) return 'Recovering...';
+            if (sec < 60) return `${sec}s`;
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}m ${String(s).padStart(2, '0')}s`;
         }
 
         // --- Sparkline Renderer ---
@@ -1221,7 +1508,7 @@
             else el.classList.add(defaultClass);
         }
 
-        // --- Render Worker Nodes ---
+        // --- Render Worker Nodes with Live FloodWait Countdowns & Speeds ---
         function renderWorkerNodes(nodes) {
             const grid = document.getElementById('worker-node-grid');
             if (!nodes || nodes.length === 0) {
@@ -1230,21 +1517,32 @@
             }
 
             grid.innerHTML = nodes.map(node => {
-                const statusClass = !node.healthy ? 'limited' : (node.load > 0 ? 'busy' : 'idle');
-                const cardClass = !node.healthy ? 'node-card rate-limited' : 'node-card';
-                const loadPct = Math.min(100, node.load * 25);
+                const isLimited = !node.healthy;
+                const isBusy = node.healthy && node.load > 0;
+                const statusClass = isLimited ? 'limited' : (isBusy ? 'busy' : 'idle');
+                const cardClass = isLimited ? 'node-card rate-limited' : (isBusy ? 'node-card busy-node' : 'node-card');
+                const loadPct = isLimited ? 100 : Math.min(100, node.load * 25);
+
+                const statusLabel = isLimited
+                    ? (node.cooldown_sec > 0 ? `Cooldown: ${formatCooldown(node.cooldown_sec)}` : 'Rate-Limited')
+                    : escapeHtml(node.status);
+
+                const speedHtml = isBusy
+                    ? `<span class="node-speed">${escapeHtml(node.speed || '0 B/s')}</span>`
+                    : `<span class="node-speed idle-speed">${node.connected ? '0 B/s' : 'Standby'}</span>`;
+
                 return `
                     <div class="${cardClass}">
                         <div class="node-top">
                             <span class="node-name" title="${escapeHtml(node.name)}">#${node.id} ${escapeHtml(node.name)}</span>
-                            <span class="node-status ${statusClass}">${escapeHtml(node.status)}</span>
+                            <span class="node-status mono ${statusClass}">${statusLabel}</span>
                         </div>
                         <div class="node-meta mono">
-                            <span>Active Tasks: ${node.load}</span>
-                            <span>${node.connected ? 'Online' : 'Standby'}</span>
+                            <span>Tasks: ${node.load}</span>
+                            ${speedHtml}
                         </div>
                         <div class="node-bar">
-                            <div class="node-bar-fill" style="width: ${loadPct}%;"></div>
+                            <div class="node-bar-fill ${isLimited ? 'limited-bar' : ''}" style="width: ${loadPct}%;"></div>
                         </div>
                     </div>
                 `;
@@ -1269,15 +1567,20 @@
 
             if (activeFilter === 'all' || activeFilter === 'uploading') {
                 upList.forEach(t => {
+                    const extBadge = formatExtBadge(t);
+                    const workerBadge = t.worker_name ? `<span class="q-worker-pill mono">${escapeHtml(t.worker_name)}</span>` : '';
+                    const fname = t.filename || 'Unknown File';
                     itemsHtml += `
                         <div class="q-item">
                             <div class="q-top">
-                                <div class="q-title-wrap">
+                                <div class="q-badges">
                                     <span class="q-tag up"><i class="fas fa-arrow-up"></i> Uploading</span>
-                                    <span class="q-filename mono" title="${escapeHtml(t.filename)}">${escapeHtml(t.filename)}</span>
+                                    ${extBadge}
+                                    ${workerBadge}
                                 </div>
                                 <span class="q-pct mono">${t.percentage}%</span>
                             </div>
+                            <div class="q-filename mono" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
                             <div class="q-bar-bg"><div class="q-bar-fill up" style="width: ${t.percentage}%;"></div></div>
                             <div class="q-stats mono">
                                 <span>${escapeHtml(t.current)} / ${escapeHtml(t.total)}</span>
@@ -1289,15 +1592,20 @@
 
             if (activeFilter === 'all' || activeFilter === 'downloading') {
                 dlList.forEach(t => {
+                    const extBadge = formatExtBadge(t);
+                    const workerBadge = t.worker_name ? `<span class="q-worker-pill mono">${escapeHtml(t.worker_name)}</span>` : '';
+                    const fname = t.filename || 'Unknown File';
                     itemsHtml += `
                         <div class="q-item">
                             <div class="q-top">
-                                <div class="q-title-wrap">
+                                <div class="q-badges">
                                     <span class="q-tag dl"><i class="fas fa-arrow-down"></i> Downloading</span>
-                                    <span class="q-filename mono" title="${escapeHtml(t.filename)}">${escapeHtml(t.filename)}</span>
+                                    ${extBadge}
+                                    ${workerBadge}
                                 </div>
                                 <span class="q-pct mono">${t.percentage}%</span>
                             </div>
+                            <div class="q-filename mono" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
                             <div class="q-bar-bg"><div class="q-bar-fill" style="width: ${t.percentage}%;"></div></div>
                             <div class="q-stats mono">
                                 <span>${escapeHtml(t.current)} / ${escapeHtml(t.total)}</span>
@@ -1309,15 +1617,18 @@
 
             if (activeFilter === 'all' || activeFilter === 'pending') {
                 waitList.forEach(t => {
+                    const extBadge = formatExtBadge(t);
+                    const fname = t.filename || 'Unknown File';
                     itemsHtml += `
-                        <div class="q-item" style="opacity: 0.78;">
+                        <div class="q-item" style="opacity: 0.84;">
                             <div class="q-top">
-                                <div class="q-title-wrap">
+                                <div class="q-badges">
                                     <span class="q-tag wait"><i class="fas fa-clock"></i> Queued</span>
-                                    <span class="q-filename mono" style="color: var(--text-secondary);" title="${escapeHtml(t.filename)}">${escapeHtml(t.filename)}</span>
+                                    ${extBadge}
                                 </div>
                                 <span class="q-pct mono" style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(t.size || 'Waiting')}</span>
                             </div>
+                            <div class="q-filename mono" style="color: var(--text-secondary);" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
                         </div>`;
                 });
             }
@@ -1346,6 +1657,22 @@
         // --- Apply Status Payload to DOM ---
         function applyStatusUpdate(data) {
             document.getElementById('val-bot_status').innerText = data.bot_status;
+            const statusBadge = document.getElementById('engine-status-badge');
+            const pauseBtn = document.getElementById('btn-toggle-pause');
+            const pauseBtnLabel = document.getElementById('pause-btn-label');
+
+            if (data.queue_paused) {
+                statusBadge.classList.add('paused');
+                pauseBtn.classList.add('paused-active');
+                pauseBtn.querySelector('i').className = 'fas fa-play';
+                pauseBtnLabel.innerText = 'Resume Intake';
+            } else {
+                statusBadge.classList.remove('paused');
+                pauseBtn.classList.remove('paused-active');
+                pauseBtn.querySelector('i').className = 'fas fa-pause';
+                pauseBtnLabel.innerText = 'Pause Intake';
+            }
+
             document.getElementById('val-bot_uptime').innerText = data.bot_uptime;
             document.getElementById('val-active_batches').innerText = data.active_batches ?? 0;
             document.getElementById('val-total_users').innerText = data.total_users;
@@ -1487,6 +1814,7 @@
             drawSparkline('sys-sparkline', sysHistory.cpu, sysHistory.ram, '#3b82f6', '#10b981', 100);
         });
 
+        initTelegramMiniApp();
         connectTelemetryStream();
     </script>
 </body>
