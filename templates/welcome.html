@@ -542,6 +542,117 @@
             display: block;
         }
 
+        /* --- 7-Day Volume & Rename History Chart --- */
+        .history-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .history-summary-pill {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.73rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .history-summary-pill strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .history-chart-box {
+            position: relative;
+            width: 100%;
+            height: 215px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 0.75rem 0.85rem 0.5rem;
+            overflow: hidden;
+        }
+
+        .history-legend {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 0.45rem;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+        }
+
+        .history-legend-items {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .history-canvas-wrap {
+            position: relative;
+            width: 100%;
+            height: 165px;
+        }
+
+        canvas#history-7d-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .history-tooltip {
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(96, 165, 250, 0.4);
+            border-radius: 10px;
+            padding: 0.55rem 0.8rem;
+            font-size: 0.74rem;
+            color: var(--text-primary);
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 5;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+            display: flex;
+            flex-direction: column;
+            gap: 0.22rem;
+        }
+
+        .history-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-title {
+            font-weight: 700;
+            color: #93c5fd;
+            margin-bottom: 0.1rem;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .tooltip-row strong {
+            color: var(--text-primary);
+        }
+
         /* --- Live Telemetry Terminal --- */
         .filter-tabs {
             display: flex;
@@ -1165,6 +1276,32 @@
             </div>
         </div>
 
+        <!-- 7-Day Volume & Rename History Card (MongoDB Persistent Rollups) -->
+        <div class="card card-full">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-chart-column"></i> 7-Day Volume & Rename History</span>
+                <div class="history-header-right mono">
+                    <span class="history-summary-pill">7D Volume: <strong id="val-7d-gb">0.00 GB</strong></span>
+                    <span class="history-summary-pill">7D Renames: <strong id="val-7d-renames">0</strong></span>
+                    <span class="history-summary-pill">7D Peak Tasks: <strong id="val-7d-peak">0</strong></span>
+                </div>
+            </div>
+            <div class="history-chart-box">
+                <div class="history-legend">
+                    <div class="history-legend-items">
+                        <span class="legend-item"><span class="legend-swatch" style="background: #10b981;"></span> Volume (GB)</span>
+                        <span class="legend-item"><span class="legend-swatch" style="background: #a855f7;"></span> Renames Count</span>
+                        <span class="legend-item"><span class="legend-swatch" style="background: #3b82f6; border-radius: 50%;"></span> Peak Active Tasks</span>
+                    </div>
+                    <span style="color: var(--text-muted); font-size: 0.7rem;">UTC Daily Rollups &bull; Hover or tap bars to inspect</span>
+                </div>
+                <div class="history-canvas-wrap">
+                    <div class="history-tooltip mono" id="history-tooltip"></div>
+                    <canvas id="history-7d-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Live Telemetry Card -->
         <div class="card card-full">
             <div class="card-header">
@@ -1306,6 +1443,8 @@
 
         let activeFilter = 'all';
         let latestQueueData = { uploading: [], downloading: [], pending: [] };
+        let latestAnalytics7d = { days: [], summary: { total_gb: 0, total_renames_short: '0', peak_active_tasks: 0 } };
+        let hoveredHistoryIdx = -1;
         let prevActiveTasks = null;
         let prevHealthyWorkers = null;
         let tmaInitData = '';
@@ -1499,6 +1638,193 @@
             renderSeries(seriesA, colorA, 'rgba(168, 85, 247, 0.18)');
             ctx.restore();
         }
+
+        // --- 7-Day Volume & Rename History Bar Chart Renderer ---
+        function drawRoundedTopRect(ctx, x, y, width, height, radius) {
+            if (height <= 0) return;
+            const r = Math.min(radius, width / 2, height);
+            ctx.beginPath();
+            ctx.moveTo(x, y + height);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function applyAnalytics7dUpdate(data) {
+            if (!data || !Array.isArray(data.days)) return;
+            latestAnalytics7d = data;
+
+            if (data.summary) {
+                document.getElementById('val-7d-gb').innerText = `${Number(data.summary.total_gb || 0).toFixed(2)} GB`;
+                document.getElementById('val-7d-renames').innerText = data.summary.total_renames_short ?? data.summary.total_renames ?? '0';
+                document.getElementById('val-7d-peak').innerText = data.summary.peak_active_tasks ?? 0;
+            }
+
+            draw7DayHistoryChart();
+        }
+
+        function draw7DayHistoryChart() {
+            const canvas = document.getElementById('history-7d-canvas');
+            if (!canvas) return;
+            const days = latestAnalytics7d.days || [];
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+
+            if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
+                canvas.width = Math.floor(rect.width * dpr);
+                canvas.height = Math.floor(rect.height * dpr);
+            }
+
+            const ctx = canvas.getContext('2d');
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            if (days.length === 0) {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '12px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Collecting 7-day MongoDB rollup metrics...', rect.width / 2, rect.height / 2);
+                ctx.restore();
+                return;
+            }
+
+            const padTop = 24;
+            const padBottom = 26;
+            const padX = 12;
+            const chartW = rect.width - padX * 2;
+            const chartH = rect.height - padTop - padBottom;
+            const baseY = padTop + chartH;
+
+            const maxGb = Math.max(1, ...days.map(d => Number(d.gb_transferred || 0))) * 1.18;
+            const maxRenames = Math.max(1, ...days.map(d => Number(d.renames_count || 0))) * 1.18;
+
+            // Subtle horizontal grid lines
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.09)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 3; i++) {
+                const gy = padTop + (chartH / 3) * i;
+                ctx.beginPath();
+                ctx.moveTo(padX, gy);
+                ctx.lineTo(rect.width - padX, gy);
+                ctx.stroke();
+            }
+
+            const colW = chartW / days.length;
+            const barGap = Math.max(3, Math.min(6, colW * 0.08));
+            const maxBarW = Math.min(24, (colW - barGap * 3) / 2);
+            const barW = Math.max(6, maxBarW);
+
+            days.forEach((day, idx) => {
+                const centerX = padX + colW * idx + colW / 2;
+
+                // Hover highlight column backdrop
+                if (hoveredHistoryIdx === idx) {
+                    ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+                    ctx.fillRect(padX + colW * idx + 3, padTop - 6, colW - 6, chartH + 10);
+                }
+
+                const gbVal = Number(day.gb_transferred || 0);
+                const renVal = Number(day.renames_count || 0);
+                const peakVal = Number(day.peak_active_tasks || 0);
+
+                const gbH = gbVal > 0 ? Math.max(4, (gbVal / maxGb) * chartH) : 2;
+                const renH = renVal > 0 ? Math.max(4, (renVal / maxRenames) * chartH) : 2;
+
+                const leftBarX = centerX - barW - barGap / 2;
+                const rightBarX = centerX + barGap / 2;
+
+                // Volume (GB) bar - Emerald gradient
+                const gbGrad = ctx.createLinearGradient(0, baseY - gbH, 0, baseY);
+                gbGrad.addColorStop(0, gbVal > 0 ? '#34d399' : 'rgba(16, 185, 129, 0.18)');
+                gbGrad.addColorStop(1, gbVal > 0 ? '#059669' : 'rgba(16, 185, 129, 0.10)');
+                ctx.fillStyle = gbGrad;
+                drawRoundedTopRect(ctx, leftBarX, baseY - gbH, barW, gbH, 4);
+
+                // Renames count bar - Purple gradient
+                const renGrad = ctx.createLinearGradient(0, baseY - renH, 0, baseY);
+                renGrad.addColorStop(0, renVal > 0 ? '#c084fc' : 'rgba(168, 85, 247, 0.18)');
+                renGrad.addColorStop(1, renVal > 0 ? '#7c3aed' : 'rgba(168, 85, 247, 0.10)');
+                ctx.fillStyle = renGrad;
+                drawRoundedTopRect(ctx, rightBarX, baseY - renH, barW, renH, 4);
+
+                // Peak active tasks badge above bar pair
+                if (peakVal > 0) {
+                    const topBarY = baseY - Math.max(gbH, renH) - 7;
+                    ctx.font = '600 10px "JetBrains Mono", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#60a5fa';
+                    ctx.fillText(`⚡${peakVal}`, centerX, Math.max(11, topBarY));
+                }
+
+                // X-axis date label
+                ctx.font = idx === days.length - 1
+                    ? '700 11px "JetBrains Mono", monospace'
+                    : '500 11px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = idx === days.length - 1 ? '#f8fafc' : '#94a3b8';
+                ctx.fillText(day.label || day.date.slice(5), centerX, rect.height - 7);
+            });
+
+            ctx.restore();
+        }
+
+        // Interactive hover/touch inspection on 7-day chart
+        (function setupHistoryChartInteractions() {
+            const canvas = document.getElementById('history-7d-canvas');
+            const tooltip = document.getElementById('history-tooltip');
+            if (!canvas || !tooltip) return;
+
+            function handlePointer(clientX) {
+                const days = latestAnalytics7d.days || [];
+                if (!days.length) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const relX = clientX - rect.left - 12;
+                const chartW = rect.width - 24;
+                if (relX < 0 || relX > chartW) {
+                    hoveredHistoryIdx = -1;
+                    tooltip.classList.remove('visible');
+                    draw7DayHistoryChart();
+                    return;
+                }
+
+                const idx = Math.min(days.length - 1, Math.max(0, Math.floor((relX / chartW) * days.length)));
+                if (hoveredHistoryIdx !== idx) {
+                    hoveredHistoryIdx = idx;
+                    draw7DayHistoryChart();
+                }
+
+                const day = days[idx];
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">${escapeHtml(day.date)} (${escapeHtml(day.label)})</div>
+                    <div class="tooltip-row"><span>Volume:</span><strong>${Number(day.gb_transferred || 0).toFixed(2)} GB</strong></div>
+                    <div class="tooltip-row"><span>Renames:</span><strong>${day.renames_count ?? 0}</strong></div>
+                    <div class="tooltip-row"><span>Peak Tasks:</span><strong>${day.peak_active_tasks ?? 0}</strong></div>
+                `;
+
+                const tipWidth = 185;
+                const colCenter = 12 + (chartW / days.length) * (idx + 0.5);
+                const leftPos = Math.min(Math.max(8, colCenter - tipWidth / 2), Math.max(8, rect.width - tipWidth - 8));
+                tooltip.style.left = `${leftPos}px`;
+                tooltip.classList.add('visible');
+            }
+
+            canvas.addEventListener('mousemove', (e) => handlePointer(e.clientX));
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches && e.touches[0]) handlePointer(e.touches[0].clientX);
+            }, { passive: true });
+            canvas.addEventListener('mouseleave', () => {
+                hoveredHistoryIdx = -1;
+                tooltip.classList.remove('visible');
+                draw7DayHistoryChart();
+            });
+        })();
 
         // --- Meter Color Thresholds ---
         function applyMeterColor(el, pct, defaultClass) {
@@ -1750,6 +2076,18 @@
             document.getElementById('last-sync-time').innerText = now.toTimeString().split(' ')[0];
         }
 
+        // --- Initial 7-Day History Fetch ---
+        async function fetchInitial7dAnalytics() {
+            try {
+                const res = await fetch('/api/analytics/7d');
+                if (res.ok) {
+                    applyAnalytics7dUpdate(await res.json());
+                }
+            } catch (err) {
+                console.error('7d analytics fetch error:', err);
+            }
+        }
+
         // --- Primary SSE Stream with Automatic Fallback ---
         let fallbackInterval = null;
 
@@ -1757,9 +2095,14 @@
             if (fallbackInterval) return;
             fallbackInterval = setInterval(async () => {
                 try {
-                    const [sRes, qRes] = await Promise.all([fetch('/api/status'), fetch('/api/queue')]);
+                    const [sRes, qRes, aRes] = await Promise.all([
+                        fetch('/api/status'),
+                        fetch('/api/queue'),
+                        fetch('/api/analytics/7d')
+                    ]);
                     if (sRes.ok) applyStatusUpdate(await sRes.json());
                     if (qRes.ok) renderTelemetry(await qRes.json());
+                    if (aRes.ok) applyAnalytics7dUpdate(await aRes.json());
                 } catch (err) {
                     console.error('Fallback polling error:', err);
                 }
@@ -1797,6 +2140,7 @@
                     const payload = JSON.parse(event.data);
                     if (payload.status) applyStatusUpdate(payload.status);
                     if (payload.queue) renderTelemetry(payload.queue);
+                    if (payload.analytics_7d) applyAnalytics7dUpdate(payload.analytics_7d);
                 } catch (err) {
                     console.error('SSE parse error:', err);
                 }
@@ -1812,9 +2156,11 @@
         window.addEventListener('resize', () => {
             drawSparkline('net-sparkline', netHistory.up, netHistory.dl, '#a855f7', '#10b981');
             drawSparkline('sys-sparkline', sysHistory.cpu, sysHistory.ram, '#3b82f6', '#10b981', 100);
+            draw7DayHistoryChart();
         });
 
         initTelegramMiniApp();
+        fetchInitial7dAnalytics();
         connectTelemetryStream();
     </script>
 </body>
