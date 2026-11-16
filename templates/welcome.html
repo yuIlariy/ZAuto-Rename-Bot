@@ -546,7 +546,7 @@
         .history-header-right {
             display: flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.55rem;
             flex-wrap: wrap;
         }
 
@@ -570,21 +570,22 @@
         .history-chart-box {
             position: relative;
             width: 100%;
-            height: 215px;
+            height: auto;
             background: var(--bg-surface);
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            padding: 0.75rem 0.85rem 0.5rem;
-            overflow: hidden;
+            padding: 0.85rem 0.9rem 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
         }
 
-        .history-legend {
+        .history-toolbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 0.6rem;
-            margin-bottom: 0.45rem;
+            gap: 0.65rem;
             font-size: 0.72rem;
             color: var(--text-secondary);
         }
@@ -592,65 +593,102 @@
         .history-legend-items {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.85rem;
             flex-wrap: wrap;
+        }
+
+        .history-mode-tabs {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.18rem;
+            gap: 0.15rem;
+        }
+
+        .history-mode-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .history-mode-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .history-mode-btn.active {
+            background: rgba(59, 130, 246, 0.22);
+            color: #93c5fd;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
         }
 
         .history-canvas-wrap {
             position: relative;
             width: 100%;
-            height: 165px;
+            height: 215px;
         }
 
         canvas#history-7d-canvas {
             width: 100%;
             height: 100%;
             display: block;
-            cursor: crosshair;
+            cursor: pointer;
+            touch-action: manipulation;
         }
 
-        .history-tooltip {
-            position: absolute;
-            top: 8px;
-            left: 12px;
-            background: rgba(15, 23, 42, 0.96);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(96, 165, 250, 0.4);
-            border-radius: 10px;
-            padding: 0.55rem 0.8rem;
-            font-size: 0.74rem;
-            color: var(--text-primary);
-            pointer-events: none;
-            opacity: 0;
-            transform: translateY(-4px);
-            transition: opacity 0.15s ease, transform 0.15s ease;
-            z-index: 5;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+        .history-inspector {
             display: flex;
-            flex-direction: column;
-            gap: 0.22rem;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.6rem 1rem;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(59, 130, 246, 0.22);
+            border-radius: 12px;
+            padding: 0.55rem 0.85rem;
+            font-size: 0.74rem;
         }
 
-        .history-tooltip.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .tooltip-title {
+        .inspector-date {
             font-weight: 700;
             color: #93c5fd;
-            margin-bottom: 0.1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
         }
 
-        .tooltip-row {
+        .inspector-metrics {
             display: flex;
-            justify-content: space-between;
-            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.85rem;
             color: var(--text-secondary);
         }
 
-        .tooltip-row strong {
+        .inspector-metric {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .inspector-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .inspector-metric strong {
             color: var(--text-primary);
+            font-weight: 700;
         }
 
         /* --- Live Telemetry Terminal --- */
@@ -1287,17 +1325,28 @@
                 </div>
             </div>
             <div class="history-chart-box">
-                <div class="history-legend">
+                <div class="history-toolbar">
                     <div class="history-legend-items">
                         <span class="legend-item"><span class="legend-swatch" style="background: #10b981;"></span> Volume (GB)</span>
-                        <span class="legend-item"><span class="legend-swatch" style="background: #a855f7;"></span> Renames Count</span>
-                        <span class="legend-item"><span class="legend-swatch" style="background: #3b82f6; border-radius: 50%;"></span> Peak Active Tasks</span>
+                        <span class="legend-item"><span class="legend-swatch" style="background: #a855f7;"></span> Renames</span>
+                        <span class="legend-item"><span class="legend-swatch" style="background: #60a5fa; border-radius: 50%;"></span> Peak Concurrency (⚡)</span>
                     </div>
-                    <span style="color: var(--text-muted); font-size: 0.7rem;">UTC Daily Rollups &bull; Hover or tap bars to inspect</span>
+                    <div class="history-mode-tabs" id="history-mode-tabs" role="tablist" aria-label="Chart metric view">
+                        <button type="button" class="history-mode-btn active" data-mode="combined">Combined</button>
+                        <button type="button" class="history-mode-btn" data-mode="volume">Volume</button>
+                        <button type="button" class="history-mode-btn" data-mode="renames">Renames</button>
+                    </div>
                 </div>
                 <div class="history-canvas-wrap">
-                    <div class="history-tooltip mono" id="history-tooltip"></div>
                     <canvas id="history-7d-canvas"></canvas>
+                </div>
+                <div class="history-inspector mono" id="history-inspector">
+                    <span class="inspector-date"><i class="fas fa-calendar-day"></i> <span id="insp-date">Waiting for rollup data...</span></span>
+                    <div class="inspector-metrics">
+                        <span class="inspector-metric"><span class="inspector-dot" style="background: #10b981;"></span> Volume: <strong id="insp-gb">0.00 GB</strong></span>
+                        <span class="inspector-metric"><span class="inspector-dot" style="background: #a855f7;"></span> Renames: <strong id="insp-renames">0</strong></span>
+                        <span class="inspector-metric"><span class="inspector-dot" style="background: #60a5fa;"></span> Peak Tasks: <strong id="insp-peak">0</strong></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1640,17 +1689,89 @@
         }
 
         // --- 7-Day Volume & Rename History Bar Chart Renderer ---
-        function drawRoundedTopRect(ctx, x, y, width, height, radius) {
-            if (height <= 0) return;
-            const r = Math.min(radius, width / 2, height);
+        let historyChartMode = 'combined'; // 'combined' | 'volume' | 'renames'
+        let selectedHistoryIdx = -1;
+        let userPinnedHistoryDay = false;
+
+        function formatCompactNumber(num) {
+            const n = Number(num || 0);
+            if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+            if (n >= 10000) return `${Math.round(n / 1000)}k`;
+            if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+            return String(Math.round(n));
+        }
+
+        function formatCompactGb(gb) {
+            const val = Number(gb || 0);
+            if (val >= 1000) return `${(val / 1024).toFixed(1)}T`;
+            if (val >= 100) return `${Math.round(val)}G`;
+            if (val >= 10) return `${val.toFixed(1)}G`;
+            if (val > 0) return `${val.toFixed(2)}G`;
+            return '0G';
+        }
+
+        function parseDayAxisLabels(day, idx, totalDays, isCompact) {
+            const isToday = idx === totalDays - 1;
+            let weekday = '';
+            let dayNum = '';
+            if (day.date && /^\d{4}-\d{2}-\d{2}$/.test(day.date)) {
+                dayNum = day.date.slice(8, 10);
+                const dt = new Date(`${day.date}T00:00:00Z`);
+                if (!Number.isNaN(dt.getTime())) {
+                    weekday = dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+                }
+            }
+            const shortDate = day.label || (day.date ? day.date.slice(5) : `D${idx + 1}`);
+            if (isCompact) {
+                return {
+                    top: weekday || shortDate,
+                    bottom: dayNum || shortDate,
+                    isToday
+                };
+            }
+            return {
+                top: isToday ? 'TODAY' : (weekday || shortDate),
+                bottom: isToday && weekday ? `${weekday} • ${shortDate}` : shortDate,
+                isToday
+            };
+        }
+
+        function updateHistoryInspector(idx) {
+            const days = latestAnalytics7d.days || [];
+            const dateEl = document.getElementById('insp-date');
+            const gbEl = document.getElementById('insp-gb');
+            const renEl = document.getElementById('insp-renames');
+            const peakEl = document.getElementById('insp-peak');
+            if (!dateEl || !days.length) return;
+
+            const safeIdx = (idx >= 0 && idx < days.length) ? idx : days.length - 1;
+            const day = days[safeIdx];
+            const isToday = safeIdx === days.length - 1;
+            const labelTag = isToday ? 'Today (UTC)' : (day.label || '');
+
+            dateEl.innerText = labelTag ? `${day.date} • ${labelTag}` : day.date;
+            gbEl.innerText = `${Number(day.gb_transferred || 0).toFixed(2)} GB`;
+            renEl.innerText = Number(day.renames_count || 0).toLocaleString();
+            peakEl.innerText = `⚡ ${Number(day.peak_active_tasks || 0)}`;
+        }
+
+        function buildTopRoundedPath(ctx, x, baseY, width, height, radius) {
+            const r = Math.max(0, Math.min(radius, width / 2, height));
+            const topY = baseY - height;
             ctx.beginPath();
-            ctx.moveTo(x, y + height);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.lineTo(x + width - r, y);
-            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-            ctx.lineTo(x + width, y + height);
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, topY + r);
+            ctx.arcTo(x, topY, x + r, topY, r);
+            ctx.lineTo(x + width - r, topY);
+            ctx.arcTo(x + width, topY, x + width, topY + r, r);
+            ctx.lineTo(x + width, baseY);
+        }
+
+        function drawTopRoundedBar(ctx, x, baseY, width, height, radius, fillStyle) {
+            if (height <= 0.5 || width <= 0) return;
+            buildTopRoundedPath(ctx, x, baseY, width, height, radius);
             ctx.closePath();
+            ctx.fillStyle = fillStyle;
             ctx.fill();
         }
 
@@ -1664,7 +1785,21 @@
                 document.getElementById('val-7d-peak').innerText = data.summary.peak_active_tasks ?? 0;
             }
 
+            if (data.days.length > 0 && (!userPinnedHistoryDay || selectedHistoryIdx < 0 || selectedHistoryIdx >= data.days.length)) {
+                selectedHistoryIdx = data.days.length - 1;
+            }
+            updateHistoryInspector(selectedHistoryIdx);
             draw7DayHistoryChart();
+        }
+
+        function getHistoryChartGeometry(rect) {
+            const padTop = 26;
+            const padBottom = 36;
+            const padLeft = historyChartMode === 'renames' ? 40 : 44;
+            const padRight = historyChartMode === 'combined' ? 40 : 14;
+            const chartW = Math.max(40, rect.width - padLeft - padRight);
+            const chartH = Math.max(40, Math.round(rect.height - padTop - padBottom));
+            return { padTop, padBottom, padLeft, padRight, chartW, chartH, baseY: padTop + chartH };
         }
 
         function draw7DayHistoryChart() {
@@ -1694,134 +1829,227 @@
                 return;
             }
 
-            const padTop = 24;
-            const padBottom = 26;
-            const padX = 12;
-            const chartW = rect.width - padX * 2;
-            const chartH = rect.height - padTop - padBottom;
-            const baseY = padTop + chartH;
+            const { padTop, padLeft, padRight, chartW, chartH, baseY } = getHistoryChartGeometry(rect);
 
-            const maxGb = Math.max(1, ...days.map(d => Number(d.gb_transferred || 0))) * 1.18;
-            const maxRenames = Math.max(1, ...days.map(d => Number(d.renames_count || 0))) * 1.18;
+            const rawMaxGb = Math.max(0, ...days.map(d => Number(d.gb_transferred || 0)));
+            const rawMaxRen = Math.max(0, ...days.map(d => Number(d.renames_count || 0)));
+            const maxGb = Math.max(1, rawMaxGb) * 1.2;
+            const maxRenames = Math.max(1, rawMaxRen) * 1.2;
 
-            // Subtle horizontal grid lines
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.09)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i <= 3; i++) {
-                const gy = padTop + (chartH / 3) * i;
+            // Horizontal gridlines + Y-axis scale ticks
+            const gridSteps = 3;
+            ctx.font = '500 10px "JetBrains Mono", monospace';
+            for (let i = 0; i <= gridSteps; i++) {
+                const ratio = i / gridSteps; // 0 = top, 1 = bottom
+                const gy = Math.round(padTop + chartH * ratio) + 0.5;
+
+                ctx.strokeStyle = i === gridSteps ? 'rgba(148, 163, 184, 0.26)' : 'rgba(148, 163, 184, 0.09)';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(padX, gy);
-                ctx.lineTo(rect.width - padX, gy);
+                ctx.moveTo(padLeft, gy);
+                ctx.lineTo(rect.width - padRight, gy);
                 ctx.stroke();
+
+                const valRatio = 1 - ratio;
+                if (historyChartMode === 'combined' || historyChartMode === 'volume') {
+                    const tickGb = maxGb * valRatio;
+                    ctx.textAlign = 'right';
+                    ctx.fillStyle = 'rgba(52, 211, 153, 0.85)';
+                    ctx.fillText(valRatio === 0 ? '0G' : formatCompactGb(tickGb), padLeft - 6, gy + 3);
+                }
+
+                if (historyChartMode === 'combined') {
+                    const tickRen = maxRenames * valRatio;
+                    ctx.textAlign = 'left';
+                    ctx.fillStyle = 'rgba(192, 132, 252, 0.85)';
+                    ctx.fillText(valRatio === 0 ? '0' : formatCompactNumber(tickRen), rect.width - padRight + 6, gy + 3);
+                } else if (historyChartMode === 'renames') {
+                    const tickRen = maxRenames * valRatio;
+                    ctx.textAlign = 'right';
+                    ctx.fillStyle = 'rgba(192, 132, 252, 0.85)';
+                    ctx.fillText(valRatio === 0 ? '0' : formatCompactNumber(tickRen), padLeft - 6, gy + 3);
+                }
             }
 
+            const activeIdx = (hoveredHistoryIdx >= 0 && hoveredHistoryIdx < days.length)
+                ? hoveredHistoryIdx
+                : selectedHistoryIdx;
+
             const colW = chartW / days.length;
-            const barGap = Math.max(3, Math.min(6, colW * 0.08));
-            const maxBarW = Math.min(24, (colW - barGap * 3) / 2);
-            const barW = Math.max(6, maxBarW);
+            const isCompact = colW < 56;
 
             days.forEach((day, idx) => {
-                const centerX = padX + colW * idx + colW / 2;
+                const colLeft = padLeft + colW * idx;
+                const centerX = colLeft + colW / 2;
+                const isSelected = idx === activeIdx;
 
-                // Hover highlight column backdrop
-                if (hoveredHistoryIdx === idx) {
-                    ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
-                    ctx.fillRect(padX + colW * idx + 3, padTop - 6, colW - 6, chartH + 10);
+                // Selected / hovered column highlight: top-rounded pill ending flush at baseY
+                if (isSelected) {
+                    const selX = colLeft + 2;
+                    const selW = Math.max(0, colW - 4);
+                    const selH = chartH + 8;
+                    drawTopRoundedBar(ctx, selX, baseY, selW, selH, 8, 'rgba(59, 130, 246, 0.11)');
+
+                    buildTopRoundedPath(ctx, selX, baseY, selW, selH, 8);
+                    ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
                 }
 
                 const gbVal = Number(day.gb_transferred || 0);
                 const renVal = Number(day.renames_count || 0);
                 const peakVal = Number(day.peak_active_tasks || 0);
+                const hasActivity = gbVal > 0 || renVal > 0 || peakVal > 0;
 
-                const gbH = gbVal > 0 ? Math.max(4, (gbVal / maxGb) * chartH) : 2;
-                const renH = renVal > 0 ? Math.max(4, (renVal / maxRenames) * chartH) : 2;
+                if (historyChartMode === 'combined') {
+                    const barGap = Math.max(3, Math.min(6, colW * 0.08));
+                    const barW = Math.max(7, Math.min(22, (colW - barGap * 3) / 2));
+                    const gbH = gbVal > 0 ? Math.min(chartH, Math.max(6, (gbVal / maxGb) * chartH)) : 0;
+                    const renH = renVal > 0 ? Math.min(chartH, Math.max(6, (renVal / maxRenames) * chartH)) : 0;
+                    const leftBarX = centerX - barW - barGap / 2;
+                    const rightBarX = centerX + barGap / 2;
 
-                const leftBarX = centerX - barW - barGap / 2;
-                const rightBarX = centerX + barGap / 2;
+                    if (gbH > 0) {
+                        const gbGrad = ctx.createLinearGradient(0, baseY - gbH, 0, baseY);
+                        gbGrad.addColorStop(0, '#34d399');
+                        gbGrad.addColorStop(1, '#059669');
+                        drawTopRoundedBar(ctx, leftBarX, baseY, barW, gbH, 5, gbGrad);
+                    }
 
-                // Volume (GB) bar - Emerald gradient
-                const gbGrad = ctx.createLinearGradient(0, baseY - gbH, 0, baseY);
-                gbGrad.addColorStop(0, gbVal > 0 ? '#34d399' : 'rgba(16, 185, 129, 0.18)');
-                gbGrad.addColorStop(1, gbVal > 0 ? '#059669' : 'rgba(16, 185, 129, 0.10)');
-                ctx.fillStyle = gbGrad;
-                drawRoundedTopRect(ctx, leftBarX, baseY - gbH, barW, gbH, 4);
+                    if (renH > 0) {
+                        const renGrad = ctx.createLinearGradient(0, baseY - renH, 0, baseY);
+                        renGrad.addColorStop(0, '#c084fc');
+                        renGrad.addColorStop(1, '#7c3aed');
+                        drawTopRoundedBar(ctx, rightBarX, baseY, barW, renH, 5, renGrad);
+                    }
 
-                // Renames count bar - Purple gradient
-                const renGrad = ctx.createLinearGradient(0, baseY - renH, 0, baseY);
-                renGrad.addColorStop(0, renVal > 0 ? '#c084fc' : 'rgba(168, 85, 247, 0.18)');
-                renGrad.addColorStop(1, renVal > 0 ? '#7c3aed' : 'rgba(168, 85, 247, 0.10)');
-                ctx.fillStyle = renGrad;
-                drawRoundedTopRect(ctx, rightBarX, baseY - renH, barW, renH, 4);
+                    const highestH = Math.max(gbH, renH);
+                    if (peakVal > 0) {
+                        const rawBadgeY = baseY - highestH - 6;
+                        const badgeY = Math.max(padTop - 2, Math.min(baseY - 11, rawBadgeY));
+                        ctx.font = isCompact
+                            ? '700 9px "JetBrains Mono", monospace'
+                            : '700 10px "JetBrains Mono", monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = '#60a5fa';
+                        ctx.fillText(`⚡${peakVal}`, centerX, badgeY, colW - 2);
+                    } else if (!hasActivity) {
+                        ctx.font = '500 10px "JetBrains Mono", monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = 'rgba(100, 116, 139, 0.55)';
+                        ctx.fillText('—', centerX, baseY - 10, colW - 4);
+                    }
+                } else {
+                    // Single focused bar mode ('volume' or 'renames') with direct value label above bar
+                    const isVol = historyChartMode === 'volume';
+                    const val = isVol ? gbVal : renVal;
+                    const maxScale = isVol ? maxGb : maxRenames;
+                    const barW = Math.max(14, Math.min(34, colW * 0.52));
+                    const barH = val > 0 ? Math.min(chartH, Math.max(6, (val / maxScale) * chartH)) : 0;
+                    const barX = centerX - barW / 2;
 
-                // Peak active tasks badge above bar pair
-                if (peakVal > 0) {
-                    const topBarY = baseY - Math.max(gbH, renH) - 7;
-                    ctx.font = '600 10px "JetBrains Mono", monospace';
+                    if (barH > 0) {
+                        const grad = ctx.createLinearGradient(0, baseY - barH, 0, baseY);
+                        grad.addColorStop(0, isVol ? '#34d399' : '#c084fc');
+                        grad.addColorStop(1, isVol ? '#059669' : '#7c3aed');
+                        drawTopRoundedBar(ctx, barX, baseY, barW, barH, 6, grad);
+                    }
+
+                    ctx.font = isCompact
+                        ? '700 9px "JetBrains Mono", monospace'
+                        : '700 10px "JetBrains Mono", monospace';
                     ctx.textAlign = 'center';
-                    ctx.fillStyle = '#60a5fa';
-                    ctx.fillText(`⚡${peakVal}`, centerX, Math.max(11, topBarY));
+                    if (val > 0) {
+                        ctx.fillStyle = isVol ? '#6ee7b7' : '#e9d5ff';
+                        const labelStr = isVol ? formatCompactGb(val) : formatCompactNumber(val);
+                        const labelY = Math.max(padTop - 2, Math.min(baseY - 11, baseY - barH - 6));
+                        ctx.fillText(labelStr, centerX, labelY, colW - 2);
+                    } else {
+                        ctx.fillStyle = 'rgba(100, 116, 139, 0.55)';
+                        ctx.fillText('—', centerX, baseY - 10, colW - 4);
+                    }
                 }
 
-                // X-axis date label
-                ctx.font = idx === days.length - 1
-                    ? '700 11px "JetBrains Mono", monospace'
-                    : '500 11px "JetBrains Mono", monospace';
+                // 2-line X-axis date labels strictly below baseY
+                const axis = parseDayAxisLabels(day, idx, days.length, isCompact);
                 ctx.textAlign = 'center';
-                ctx.fillStyle = idx === days.length - 1 ? '#f8fafc' : '#94a3b8';
-                ctx.fillText(day.label || day.date.slice(5), centerX, rect.height - 7);
+                ctx.font = (axis.isToday || isSelected)
+                    ? '700 10px "JetBrains Mono", monospace'
+                    : '600 10px "JetBrains Mono", monospace';
+                ctx.fillStyle = axis.isToday ? '#60a5fa' : (isSelected ? '#f8fafc' : '#94a3b8');
+                ctx.fillText(axis.top, centerX, baseY + 14, colW - 4);
+
+                ctx.font = '500 9.5px "JetBrains Mono", monospace';
+                ctx.fillStyle = (axis.isToday || isSelected) ? '#cbd5e1' : '#64748b';
+                ctx.fillText(axis.bottom, centerX, baseY + 27, colW - 4);
             });
 
             ctx.restore();
         }
 
-        // Interactive hover/touch inspection on 7-day chart
+        // Interactive mode switcher & hover/tap selection on 7-day chart
         (function setupHistoryChartInteractions() {
             const canvas = document.getElementById('history-7d-canvas');
-            const tooltip = document.getElementById('history-tooltip');
-            if (!canvas || !tooltip) return;
+            const modeTabs = document.getElementById('history-mode-tabs');
 
-            function handlePointer(clientX) {
-                const days = latestAnalytics7d.days || [];
-                if (!days.length) return;
-
-                const rect = canvas.getBoundingClientRect();
-                const relX = clientX - rect.left - 12;
-                const chartW = rect.width - 24;
-                if (relX < 0 || relX > chartW) {
-                    hoveredHistoryIdx = -1;
-                    tooltip.classList.remove('visible');
+            if (modeTabs) {
+                modeTabs.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.history-mode-btn');
+                    if (!btn) return;
+                    modeTabs.querySelectorAll('.history-mode-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    historyChartMode = btn.dataset.mode || 'combined';
                     draw7DayHistoryChart();
-                    return;
-                }
-
-                const idx = Math.min(days.length - 1, Math.max(0, Math.floor((relX / chartW) * days.length)));
-                if (hoveredHistoryIdx !== idx) {
-                    hoveredHistoryIdx = idx;
-                    draw7DayHistoryChart();
-                }
-
-                const day = days[idx];
-                tooltip.innerHTML = `
-                    <div class="tooltip-title">${escapeHtml(day.date)} (${escapeHtml(day.label)})</div>
-                    <div class="tooltip-row"><span>Volume:</span><strong>${Number(day.gb_transferred || 0).toFixed(2)} GB</strong></div>
-                    <div class="tooltip-row"><span>Renames:</span><strong>${day.renames_count ?? 0}</strong></div>
-                    <div class="tooltip-row"><span>Peak Tasks:</span><strong>${day.peak_active_tasks ?? 0}</strong></div>
-                `;
-
-                const tipWidth = 185;
-                const colCenter = 12 + (chartW / days.length) * (idx + 0.5);
-                const leftPos = Math.min(Math.max(8, colCenter - tipWidth / 2), Math.max(8, rect.width - tipWidth - 8));
-                tooltip.style.left = `${leftPos}px`;
-                tooltip.classList.add('visible');
+                });
             }
 
-            canvas.addEventListener('mousemove', (e) => handlePointer(e.clientX));
+            if (!canvas) return;
+
+            function resolveDayIndex(clientX) {
+                const days = latestAnalytics7d.days || [];
+                if (!days.length) return -1;
+                const rect = canvas.getBoundingClientRect();
+                const { padLeft, chartW } = getHistoryChartGeometry(rect);
+                const relX = clientX - rect.left - padLeft;
+                if (relX < 0 || relX > chartW) return -1;
+                return Math.min(days.length - 1, Math.max(0, Math.floor((relX / chartW) * days.length)));
+            }
+
+            canvas.addEventListener('mousemove', (e) => {
+                const idx = resolveDayIndex(e.clientX);
+                if (hoveredHistoryIdx !== idx) {
+                    hoveredHistoryIdx = idx;
+                    if (idx >= 0) updateHistoryInspector(idx);
+                    else updateHistoryInspector(selectedHistoryIdx);
+                    draw7DayHistoryChart();
+                }
+            });
+
+            canvas.addEventListener('click', (e) => {
+                const idx = resolveDayIndex(e.clientX);
+                if (idx >= 0) {
+                    selectedHistoryIdx = idx;
+                    userPinnedHistoryDay = true;
+                    updateHistoryInspector(idx);
+                    draw7DayHistoryChart();
+                }
+            });
+
             canvas.addEventListener('touchstart', (e) => {
-                if (e.touches && e.touches[0]) handlePointer(e.touches[0].clientX);
+                if (e.touches && e.touches[0]) {
+                    const idx = resolveDayIndex(e.touches[0].clientX);
+                    if (idx >= 0) {
+                        selectedHistoryIdx = idx;
+                        userPinnedHistoryDay = true;
+                        updateHistoryInspector(idx);
+                        draw7DayHistoryChart();
+                    }
+                }
             }, { passive: true });
+
             canvas.addEventListener('mouseleave', () => {
                 hoveredHistoryIdx = -1;
-                tooltip.classList.remove('visible');
+                updateHistoryInspector(selectedHistoryIdx);
                 draw7DayHistoryChart();
             });
         })();
@@ -2158,6 +2386,10 @@
             drawSparkline('sys-sparkline', sysHistory.cpu, sysHistory.ram, '#3b82f6', '#10b981', 100);
             draw7DayHistoryChart();
         });
+
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => draw7DayHistoryChart());
+        }
 
         initTelegramMiniApp();
         fetchInitial7dAnalytics();
