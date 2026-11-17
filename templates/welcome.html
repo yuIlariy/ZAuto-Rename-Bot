@@ -478,7 +478,7 @@
         /* --- User Plan & Daily Quota Card --- */
         .quota-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 0.9rem;
         }
 
@@ -1351,7 +1351,7 @@
                 grid-column: span 12;
             }
             .quota-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
         }
 
@@ -1373,6 +1373,9 @@
             .quota-grid .stat-label {
                 font-size: 0.69rem;
                 gap: 0.32rem;
+            }
+            .quota-grid .stat-value {
+                font-size: clamp(0.95rem, 3.6vw, 1.3rem);
             }
             .actions {
                 flex-direction: column;
@@ -1505,8 +1508,8 @@
         <!-- User Plan & Daily Quota Card -->
         <div class="card card-full" id="user-plan-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-id-card"></i> Your Plan & Daily Quota</span>
-                <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="card-title"><i class="fas fa-id-card"></i> Your Plan & Daily Quota<span id="val-plan-user-suffix" style="color: var(--text-primary); text-transform: none; letter-spacing: normal;"></span></span>
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <span class="mono" id="val-plan-expiry" style="font-size:0.74rem; color:var(--text-secondary);"></span>
                     <div class="status-badge" id="val-plan-badge" style="display:none;">
                         <span id="val-plan-name">Free Plan</span>
@@ -1534,6 +1537,10 @@
                     <div class="stat-block">
                         <div class="stat-label"><i class="fas fa-file-arrow-up" style="color: var(--warning);"></i> Max File Size</div>
                         <div class="stat-value mono" id="val-plan-maxfile">--</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label"><i class="fas fa-clock-rotate-left" style="color: #38bdf8;"></i> Reset / Status</div>
+                        <div class="stat-value mono" id="val-plan-reset" style="color: #7dd3fc;">--</div>
                     </div>
                 </div>
                 <div class="quota-bar-wrap" id="plan-bar-wrap">
@@ -1843,6 +1850,11 @@
                 document.getElementById('plan-guest-note').style.display = 'none';
                 document.getElementById('plan-details-wrap').style.display = 'block';
 
+                const userSuffix = document.getElementById('val-plan-user-suffix');
+                if (userSuffix && plan.first_name) {
+                    userSuffix.innerText = ` — ${plan.first_name}`;
+                }
+
                 const badge = document.getElementById('val-plan-badge');
                 badge.style.display = 'inline-flex';
                 document.getElementById('val-plan-name').innerText = plan.plan_name;
@@ -1853,13 +1865,18 @@
                 }
 
                 document.getElementById('val-plan-expiry').innerText = plan.is_premium
-                    ? `Expires: ${plan.expiry_formatted} (${plan.remaining_time})`
-                    : plan.remaining_time;
+                    ? `Expires: ${plan.expiry_formatted}`
+                    : plan.expiry_formatted;
 
                 document.getElementById('val-plan-used').innerText = plan.daily_used_human;
                 document.getElementById('val-plan-remaining').innerText = plan.remaining_human;
                 document.getElementById('val-plan-limit').innerText = plan.daily_limit_human;
                 document.getElementById('val-plan-maxfile').innerText = plan.max_file_size_human;
+
+                const resetEl = document.getElementById('val-plan-reset');
+                const resetText = plan.remaining_time || '--';
+                resetEl.innerText = resetText;
+                resetEl.title = resetText;
 
                 const barWrap = document.getElementById('plan-bar-wrap');
                 if (plan.is_premium) {
