@@ -205,11 +205,17 @@
             border-radius: 16px;
             padding: 0.9rem 1.25rem;
             display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.12);
+        }
+
+        .admin-bar-top {
+            display: flex;
             flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
             gap: 0.85rem;
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.12);
         }
 
         .admin-identity {
@@ -235,19 +241,19 @@
         .admin-actions {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.6rem;
+            gap: 0.55rem;
         }
 
         .admin-btn {
             border: 1px solid var(--border-color);
             border-radius: 10px;
-            padding: 0.5rem 0.9rem;
-            font-size: 0.78rem;
+            padding: 0.48rem 0.85rem;
+            font-size: 0.76rem;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 0.45rem;
+            gap: 0.42rem;
             transition: all 0.2s ease;
             color: var(--text-primary);
             background: rgba(2, 6, 23, 0.7);
@@ -291,6 +297,92 @@
             background: rgba(239, 68, 68, 0.28);
         }
 
+        .admin-btn.tools-toggle {
+            border-color: rgba(168, 85, 247, 0.4);
+            color: #d8b4fe;
+            background: rgba(168, 85, 247, 0.14);
+        }
+        .admin-btn.tools-toggle:hover:not(:disabled) {
+            background: rgba(168, 85, 247, 0.25);
+        }
+
+        /* --- Expanded Admin Drawer Panels --- */
+        .admin-drawer {
+            display: none;
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+            padding-top: 0.9rem;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 0.9rem;
+        }
+        .admin-drawer.open {
+            display: grid;
+        }
+        .admin-panel-box {
+            grid-column: span 4;
+            background: rgba(2, 6, 23, 0.65);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+        .admin-panel-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #93c5fd;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .admin-input, .admin-textarea {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 8px;
+            padding: 0.5rem 0.7rem;
+            color: var(--text-primary);
+            font-size: 0.78rem;
+            font-family: inherit;
+            outline: none;
+        }
+        .admin-input:focus, .admin-textarea:focus {
+            border-color: var(--accent-blue);
+        }
+        .admin-row {
+            display: flex;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+        }
+        .mini-btn {
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(30, 41, 59, 0.8);
+            color: var(--text-primary);
+            border-radius: 7px;
+            padding: 0.34rem 0.6rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .mini-btn:hover { background: rgba(51, 65, 85, 0.95); }
+        .mini-btn.prem { border-color: rgba(168, 85, 247, 0.4); color: #e9d5ff; background: rgba(168, 85, 247, 0.18); }
+        .mini-btn.ok { border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; background: rgba(16, 185, 129, 0.16); }
+        .mini-btn.danger { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.16); }
+
+        .admin-user-card {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(96, 165, 250, 0.25);
+            border-radius: 9px;
+            padding: 0.65rem;
+            font-size: 0.74rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
         /* --- Bento Grid Dashboard --- */
         .dashboard {
             max-width: 1240px;
@@ -314,6 +406,7 @@
             flex-direction: column;
             justify-content: space-between;
             transition: border-color 0.25s ease, transform 0.25s ease;
+            min-width: 0;
         }
 
         .card:hover {
@@ -370,16 +463,63 @@
             border-color: rgba(245, 158, 11, 0.35);
         }
 
+        .real-db-pill {
+            display: none;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.18rem 0.5rem;
+            border-radius: 6px;
+            background: rgba(245, 158, 11, 0.16);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            color: #fcd34d;
+            letter-spacing: 0.05em;
+        }
+
+        /* --- User Plan & Daily Quota Card --- */
+        .quota-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.9rem;
+        }
+
+        .quota-bar-wrap {
+            margin-top: 0.95rem;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 0.95rem;
+        }
+
+        .quota-bar-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.45rem;
+        }
+
+        .quota-guest-note {
+            background: var(--bg-surface);
+            border: 1px dashed rgba(148, 163, 184, 0.24);
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
         /* --- Stat Blocks --- */
         .stat-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.9rem;
         }
 
         .stat-grid-2 {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.9rem;
         }
 
@@ -392,6 +532,7 @@
             flex-direction: column;
             justify-content: center;
             min-width: 0;
+            overflow: hidden;
         }
 
         .stat-label {
@@ -401,7 +542,12 @@
             display: flex;
             align-items: center;
             gap: 0.4rem;
-            white-space: nowrap;
+            line-height: 1.25;
+            min-width: 0;
+        }
+
+        .stat-label i {
+            flex-shrink: 0;
         }
 
         .stat-value {
@@ -474,7 +620,7 @@
 
         .speed-top-bar {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.9rem;
         }
 
@@ -542,7 +688,7 @@
             display: block;
         }
 
-        /* --- 7-Day Volume & Rename History Chart --- */
+        /* --- 7-Day / 24-Hour Volume & Rename History Chart --- */
         .history-header-right {
             display: flex;
             align-items: center;
@@ -597,6 +743,13 @@
             flex-wrap: wrap;
         }
 
+        .history-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         .history-mode-tabs {
             display: inline-flex;
             align-items: center;
@@ -607,7 +760,7 @@
             gap: 0.15rem;
         }
 
-        .history-mode-btn {
+        .history-mode-btn, .history-range-btn {
             background: transparent;
             border: none;
             color: var(--text-secondary);
@@ -620,13 +773,19 @@
             transition: all 0.18s ease;
         }
 
-        .history-mode-btn:hover {
+        .history-mode-btn:hover, .history-range-btn:hover {
             color: var(--text-primary);
         }
 
         .history-mode-btn.active {
             background: rgba(59, 130, 246, 0.22);
             color: #93c5fd;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .history-range-btn.active {
+            background: rgba(168, 85, 247, 0.24);
+            color: #e9d5ff;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
         }
 
@@ -826,6 +985,32 @@
             flex-shrink: 0;
         }
 
+        .q-owner-pill {
+            font-size: 0.63rem;
+            font-weight: 700;
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.14);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 0.14rem 0.45rem;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+
+        .q-cancel-btn {
+            font-size: 0.66rem;
+            font-weight: 600;
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.14);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            padding: 0.18rem 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .q-cancel-btn:hover {
+            background: rgba(239, 68, 68, 0.28);
+        }
+
         .q-filename {
             font-size: 0.84rem;
             font-weight: 500;
@@ -903,14 +1088,14 @@
         /* --- Fleet Architecture & Per-Node Cards --- */
         .fleet-summary-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.9rem;
             margin-bottom: 1.15rem;
         }
 
         .node-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
             gap: 0.85rem;
         }
 
@@ -1008,6 +1193,17 @@
 
         .node-bar-fill.limited-bar {
             background: var(--danger);
+        }
+
+        .node-admin-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.4rem;
+            padding-top: 0.35rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+            font-size: 0.68rem;
+            color: var(--text-secondary);
         }
 
         /* --- Hardware Meters --- */
@@ -1151,6 +1347,12 @@
             .traffic-layout {
                 grid-template-columns: 1fr;
             }
+            .admin-panel-box {
+                grid-column: span 12;
+            }
+            .quota-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 640px) {
@@ -1161,13 +1363,21 @@
             .stat-grid, .speed-top-bar {
                 grid-template-columns: 1fr;
             }
-            .fleet-summary-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .fleet-summary-grid, .quota-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.65rem;
+            }
+            .quota-grid .stat-block {
+                padding: 0.85rem 0.85rem;
+            }
+            .quota-grid .stat-label {
+                font-size: 0.69rem;
+                gap: 0.32rem;
             }
             .actions {
                 flex-direction: column;
             }
-            .admin-bar {
+            .admin-bar-top {
                 flex-direction: column;
                 align-items: stretch;
             }
@@ -1213,25 +1423,130 @@
     <!-- Telegram Mini App Authenticated Admin Command Bar -->
     <div class="admin-bar-wrapper" id="admin-bar-wrapper">
         <div class="admin-bar">
-            <div class="admin-identity">
-                <span class="admin-badge"><i class="fas fa-shield-halved"></i> Admin Console</span>
-                <span id="admin-greeting">Authenticated via Telegram</span>
+            <div class="admin-bar-top">
+                <div class="admin-identity">
+                    <span class="admin-badge"><i class="fas fa-shield-halved"></i> Admin Console</span>
+                    <span id="admin-greeting">Authenticated via Telegram</span>
+                </div>
+                <div class="admin-actions">
+                    <button class="admin-btn purge" id="btn-purge-queue" onclick="triggerAdminAction('purge_queue')">
+                        <i class="fas fa-broom"></i> Purge Stuck Queue
+                    </button>
+                    <button class="admin-btn heal" id="btn-heal-workers" onclick="triggerAdminAction('heal_workers')">
+                        <i class="fas fa-heart-pulse"></i> Force-Heal Nodes
+                    </button>
+                    <button class="admin-btn pause" id="btn-toggle-pause" onclick="triggerAdminAction('toggle_pause')">
+                        <i class="fas fa-pause"></i> <span id="pause-btn-label">Pause Intake</span>
+                    </button>
+                    <button class="admin-btn tools-toggle" id="btn-toggle-drawer" onclick="toggleAdminDrawer()">
+                        <i class="fas fa-sliders"></i> <span id="drawer-btn-label">More Controls</span>
+                    </button>
+                </div>
             </div>
-            <div class="admin-actions">
-                <button class="admin-btn purge" id="btn-purge-queue" onclick="triggerAdminAction('purge_queue')">
-                    <i class="fas fa-broom"></i> Purge Stuck Queue
-                </button>
-                <button class="admin-btn heal" id="btn-heal-workers" onclick="triggerAdminAction('heal_workers')">
-                    <i class="fas fa-heart-pulse"></i> Force-Heal Nodes
-                </button>
-                <button class="admin-btn pause" id="btn-toggle-pause" onclick="triggerAdminAction('toggle_pause')">
-                    <i class="fas fa-pause"></i> <span id="pause-btn-label">Pause Intake</span>
-                </button>
+
+            <!-- Expandable Admin Operations Drawer -->
+            <div class="admin-drawer" id="admin-drawer">
+                <!-- Panel 1: User Lookup, Premium, Ban & Clear Tasks -->
+                <div class="admin-panel-box">
+                    <div class="admin-panel-title"><i class="fas fa-user-gear"></i> User & Quota Control</div>
+                    <div class="admin-row">
+                        <input type="text" id="admin-user-query" class="admin-input" style="flex:1;" placeholder="User ID or @username..." onkeydown="if(event.key==='Enter') lookupAdminUser()">
+                        <button type="button" class="mini-btn ok" onclick="lookupAdminUser()">Lookup</button>
+                    </div>
+                    <div class="admin-user-card mono" id="admin-user-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong id="au-name" style="color:#f8fafc;">--</strong>
+                            <span id="au-plan" style="color:#c084fc;">--</span>
+                        </div>
+                        <div style="color:var(--text-secondary); font-size:0.68rem;">
+                            ID: <span id="au-id">--</span> &bull; Today: <span id="au-today">--</span> &bull; Tasks: <span id="au-tasks">0</span>
+                        </div>
+                        <div class="admin-row">
+                            <button type="button" class="mini-btn prem" onclick="manageAdminUser('grant_premium', {days:7})">+7d</button>
+                            <button type="button" class="mini-btn prem" onclick="manageAdminUser('grant_premium', {days:30})">+30d</button>
+                            <button type="button" class="mini-btn prem" onclick="manageAdminUser('grant_premium', {days:0})">Lifetime</button>
+                            <button type="button" class="mini-btn" onclick="manageAdminUser('revoke_premium')">Revoke</button>
+                        </div>
+                        <div class="admin-row">
+                            <button type="button" class="mini-btn danger" id="au-ban-btn" onclick="manageAdminUser('ban')">Ban</button>
+                            <button type="button" class="mini-btn ok" id="au-unban-btn" onclick="manageAdminUser('unban')">Unban</button>
+                            <button type="button" class="mini-btn danger" onclick="manageAdminUser('clear_tasks')">Clear Tasks</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Maintenance Notice -->
+                <div class="admin-panel-box">
+                    <div class="admin-panel-title"><i class="fas fa-wrench"></i> Maintenance Notice</div>
+                    <textarea id="admin-maint-msg" class="admin-textarea" rows="3" placeholder="Custom message shown to users when intake is paused (leave blank for default)..."></textarea>
+                    <div class="admin-row" style="justify-content:flex-end;">
+                        <button type="button" class="mini-btn ok" onclick="saveMaintenanceNotice()">Save Notice</button>
+                    </div>
+                </div>
+
+                <!-- Panel 3: Global Broadcast -->
+                <div class="admin-panel-box">
+                    <div class="admin-panel-title"><i class="fas fa-bullhorn"></i> Global Broadcast</div>
+                    <textarea id="admin-bcast-msg" class="admin-textarea" rows="3" placeholder="Announcement text (Markdown supported)..."></textarea>
+                    <div class="admin-row" style="justify-content:space-between; align-items:center;">
+                        <span id="admin-bcast-status" class="mono" style="font-size:0.68rem; color:var(--text-secondary);">Idle</span>
+                        <div class="admin-row">
+                            <button type="button" class="mini-btn danger" id="btn-bcast-cancel" style="display:none;" onclick="controlBroadcast('broadcast_cancel')">Stop</button>
+                            <button type="button" class="mini-btn prem" id="btn-bcast-start" onclick="controlBroadcast('broadcast_start')">Send</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <main class="dashboard">
+
+        <!-- User Plan & Daily Quota Card -->
+        <div class="card card-full" id="user-plan-card">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-id-card"></i> Your Plan & Daily Quota</span>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span class="mono" id="val-plan-expiry" style="font-size:0.74rem; color:var(--text-secondary);"></span>
+                    <div class="status-badge" id="val-plan-badge" style="display:none;">
+                        <span id="val-plan-name">Free Plan</span>
+                    </div>
+                </div>
+            </div>
+            <div class="quota-guest-note" id="plan-guest-note">
+                <i class="fas fa-circle-info" style="color:#60a5fa;"></i>
+                <span>Open this dashboard inside the Telegram Mini App to view your personal daily upload usage, remaining quota, and unmasked active files.</span>
+            </div>
+            <div id="plan-details-wrap" style="display:none;">
+                <div class="quota-grid">
+                    <div class="stat-block">
+                        <div class="stat-label"><i class="fas fa-cloud-arrow-up" style="color: var(--accent-blue);"></i> Used Today</div>
+                        <div class="stat-value mono" id="val-plan-used">0 B</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label"><i class="fas fa-battery-three-quarters" style="color: var(--success);"></i> Remaining Today</div>
+                        <div class="stat-value mono" id="val-plan-remaining" style="color: var(--success);">--</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label"><i class="fas fa-gauge-high" style="color: var(--accent-purple);"></i> Daily Limit</div>
+                        <div class="stat-value mono" id="val-plan-limit">--</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label"><i class="fas fa-file-arrow-up" style="color: var(--warning);"></i> Max File Size</div>
+                        <div class="stat-value mono" id="val-plan-maxfile">--</div>
+                    </div>
+                </div>
+                <div class="quota-bar-wrap" id="plan-bar-wrap">
+                    <div class="quota-bar-meta mono">
+                        <span>Daily Quota Utilization</span>
+                        <span id="val-plan-pct">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill fill-ram" id="bar-plan-usage" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Core Engine Card -->
         <div class="card card-bot">
@@ -1262,6 +1577,7 @@
         <div class="card card-users">
             <div class="card-header">
                 <span class="card-title"><i class="fas fa-users"></i> Audience Metrics</span>
+                <span class="real-db-pill mono" id="real-db-pill">REAL DB</span>
             </div>
             <div class="stat-grid-2">
                 <div class="stat-block">
@@ -1314,14 +1630,14 @@
             </div>
         </div>
 
-        <!-- 7-Day Volume & Rename History Card (MongoDB Persistent Rollups) -->
+        <!-- 7-Day / 24-Hour Volume & Rename History Card (MongoDB Persistent Rollups) -->
         <div class="card card-full">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-chart-column"></i> 7-Day Volume & Rename History</span>
+                <span class="card-title"><i class="fas fa-chart-column"></i> <span id="history-card-heading">7-Day Volume & Rename History</span></span>
                 <div class="history-header-right mono">
-                    <span class="history-summary-pill">7D Volume: <strong id="val-7d-gb">0.00 GB</strong></span>
-                    <span class="history-summary-pill">7D Renames: <strong id="val-7d-renames">0</strong></span>
-                    <span class="history-summary-pill">7D Peak Tasks: <strong id="val-7d-peak">0</strong></span>
+                    <span class="history-summary-pill"><span id="lbl-range-gb">7D</span> Volume: <strong id="val-7d-gb">0.00 GB</strong></span>
+                    <span class="history-summary-pill"><span id="lbl-range-ren">7D</span> Renames: <strong id="val-7d-renames">0</strong></span>
+                    <span class="history-summary-pill"><span id="lbl-range-peak">7D</span> Peak Tasks: <strong id="val-7d-peak">0</strong></span>
                 </div>
             </div>
             <div class="history-chart-box">
@@ -1331,10 +1647,16 @@
                         <span class="legend-item"><span class="legend-swatch" style="background: #a855f7;"></span> Renames</span>
                         <span class="legend-item"><span class="legend-swatch" style="background: #60a5fa; border-radius: 50%;"></span> Peak Concurrency (⚡)</span>
                     </div>
-                    <div class="history-mode-tabs" id="history-mode-tabs" role="tablist" aria-label="Chart metric view">
-                        <button type="button" class="history-mode-btn active" data-mode="combined">Combined</button>
-                        <button type="button" class="history-mode-btn" data-mode="volume">Volume</button>
-                        <button type="button" class="history-mode-btn" data-mode="renames">Renames</button>
+                    <div class="history-controls-right">
+                        <div class="history-mode-tabs" id="history-range-tabs" role="tablist" aria-label="Chart timeframe">
+                            <button type="button" class="history-range-btn active" data-range="7d">7D</button>
+                            <button type="button" class="history-range-btn" data-range="24h">24H</button>
+                        </div>
+                        <div class="history-mode-tabs" id="history-mode-tabs" role="tablist" aria-label="Chart metric view">
+                            <button type="button" class="history-mode-btn active" data-mode="combined">Combined</button>
+                            <button type="button" class="history-mode-btn" data-mode="volume">Volume</button>
+                            <button type="button" class="history-mode-btn" data-mode="renames">Renames</button>
+                        </div>
                     </div>
                 </div>
                 <div class="history-canvas-wrap">
@@ -1493,10 +1815,67 @@
         let activeFilter = 'all';
         let latestQueueData = { uploading: [], downloading: [], pending: [] };
         let latestAnalytics7d = { days: [], summary: { total_gb: 0, total_renames_short: '0', peak_active_tasks: 0 } };
+        let latestAnalytics24h = { days: [], summary: { total_gb: 0, total_renames_short: '0', peak_active_tasks: 0 } };
+        let historyRangeMode = '7d'; // '7d' | '24h'
         let hoveredHistoryIdx = -1;
         let prevActiveTasks = null;
         let prevHealthyWorkers = null;
         let tmaInitData = '';
+        let isAdminSession = false;
+        let selectedAdminUserId = null;
+        let maintDirty = false;
+
+        function getAuthHeaders(extra = {}) {
+            const h = { ...extra };
+            if (tmaInitData) h['Authorization'] = `tma ${tmaInitData}`;
+            return h;
+        }
+
+        // --- Fetch Authenticated User Plan & Daily Quota ---
+        async function fetchUserPlan() {
+            if (!tmaInitData) return;
+            try {
+                const res = await fetch('/api/user/plan', { headers: getAuthHeaders() });
+                if (!res.ok) return;
+                const plan = await res.json();
+                if (!plan.authenticated) return;
+
+                document.getElementById('plan-guest-note').style.display = 'none';
+                document.getElementById('plan-details-wrap').style.display = 'block';
+
+                const badge = document.getElementById('val-plan-badge');
+                badge.style.display = 'inline-flex';
+                document.getElementById('val-plan-name').innerText = plan.plan_name;
+                if (plan.is_premium) {
+                    badge.style.background = 'rgba(168, 85, 247, 0.16)';
+                    badge.style.borderColor = 'rgba(168, 85, 247, 0.38)';
+                    badge.style.color = '#e9d5ff';
+                }
+
+                document.getElementById('val-plan-expiry').innerText = plan.is_premium
+                    ? `Expires: ${plan.expiry_formatted} (${plan.remaining_time})`
+                    : plan.remaining_time;
+
+                document.getElementById('val-plan-used').innerText = plan.daily_used_human;
+                document.getElementById('val-plan-remaining').innerText = plan.remaining_human;
+                document.getElementById('val-plan-limit').innerText = plan.daily_limit_human;
+                document.getElementById('val-plan-maxfile').innerText = plan.max_file_size_human;
+
+                const barWrap = document.getElementById('plan-bar-wrap');
+                if (plan.is_premium) {
+                    barWrap.style.display = 'none';
+                } else {
+                    barWrap.style.display = 'block';
+                    const pct = Math.min(100, Number(plan.usage_pct || 0));
+                    document.getElementById('val-plan-pct').innerText = `${pct}%`;
+                    const bar = document.getElementById('bar-plan-usage');
+                    bar.style.width = `${pct}%`;
+                    applyMeterColor(bar, pct, 'fill-ram');
+                }
+            } catch (err) {
+                console.error('User plan fetch failed:', err);
+            }
+        }
 
         // --- Initialize Telegram Mini App Auth ---
         async function initTelegramMiniApp() {
@@ -1509,19 +1888,21 @@
             if (!tg.initData) return;
             tmaInitData = tg.initData;
 
+            fetchUserPlan();
+            setInterval(fetchUserPlan, 15000);
+
             try {
                 const res = await fetch('/api/admin/verify', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `tma ${tmaInitData}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' })
                 });
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data.authorized) {
+                    isAdminSession = true;
                     const wrapper = document.getElementById('admin-bar-wrapper');
                     wrapper.style.display = 'block';
+                    document.getElementById('real-db-pill').style.display = 'inline-block';
                     const name = data.user?.first_name || 'Admin';
                     document.getElementById('admin-greeting').innerText = `Welcome, ${name}`;
                 }
@@ -1530,9 +1911,16 @@
             }
         }
 
+        function toggleAdminDrawer() {
+            const drawer = document.getElementById('admin-drawer');
+            const lbl = document.getElementById('drawer-btn-label');
+            const isOpen = drawer.classList.toggle('open');
+            lbl.innerText = isOpen ? 'Hide Controls' : 'More Controls';
+        }
+
         // --- Execute Authenticated Admin Action ---
-        async function triggerAdminAction(action) {
-            if (!tmaInitData) return;
+        async function triggerAdminAction(action, extraPayload = {}, skipConfirm = false) {
+            if (!tmaInitData) return null;
 
             const confirmMessages = {
                 purge_queue: 'Purge all stuck/pending tasks from the queue? Active downloads and uploads will continue uninterrupted.',
@@ -1540,16 +1928,17 @@
                 toggle_pause: 'Toggle batch intake pause/drain mode?'
             };
 
-            const proceed = await new Promise((resolve) => {
-                const tg = window.Telegram && window.Telegram.WebApp;
-                if (tg && typeof tg.showConfirm === 'function') {
-                    tg.showConfirm(confirmMessages[action] || 'Confirm admin action?', (ok) => resolve(ok));
-                } else {
-                    resolve(window.confirm(confirmMessages[action] || 'Confirm admin action?'));
-                }
-            });
-
-            if (!proceed) return;
+            if (!skipConfirm && confirmMessages[action]) {
+                const proceed = await new Promise((resolve) => {
+                    const tg = window.Telegram && window.Telegram.WebApp;
+                    if (tg && typeof tg.showConfirm === 'function') {
+                        tg.showConfirm(confirmMessages[action], (ok) => resolve(ok));
+                    } else {
+                        resolve(window.confirm(confirmMessages[action]));
+                    }
+                });
+                if (!proceed) return null;
+            }
 
             const buttons = document.querySelectorAll('.admin-btn');
             buttons.forEach(b => b.disabled = true);
@@ -1557,11 +1946,8 @@
             try {
                 const res = await fetch('/api/admin/action', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `tma ${tmaInitData}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ action })
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ action, ...extraPayload })
                 });
 
                 const result = await res.json();
@@ -1570,14 +1956,68 @@
                     if (window.Telegram?.WebApp?.HapticFeedback) {
                         window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
                     }
+                    return result;
                 } else {
                     showToast(result.error || 'Action failed.', 'fa-exclamation-circle', '#ef4444');
+                    return null;
                 }
             } catch (err) {
                 showToast('Network error executing admin action.', 'fa-exclamation-circle', '#ef4444');
+                return null;
             } finally {
                 buttons.forEach(b => b.disabled = false);
             }
+        }
+
+        async function lookupAdminUser() {
+            const q = document.getElementById('admin-user-query').value.trim();
+            if (!q || !tmaInitData) return;
+            try {
+                const res = await fetch(`/api/admin/user?q=${encodeURIComponent(q)}`, { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast(data.error || 'User not found', 'fa-exclamation-circle', '#ef4444');
+                    return;
+                }
+                const u = data.user;
+                selectedAdminUserId = u.user_id;
+                const card = document.getElementById('admin-user-card');
+                card.style.display = 'flex';
+                document.getElementById('au-name').innerText = `${u.first_name}${u.username ? ' (@' + u.username + ')' : ''}${u.is_banned ? ' [BANNED]' : ''}`;
+                document.getElementById('au-plan').innerText = u.plan.plan_name;
+                document.getElementById('au-id').innerText = u.user_id;
+                document.getElementById('au-today').innerText = `${u.plan.daily_used_human} / ${u.plan.daily_limit_human}`;
+                document.getElementById('au-tasks').innerText = `${u.active_tasks}A / ${u.queued_tasks}Q`;
+            } catch (err) {
+                showToast('User lookup failed.', 'fa-exclamation-circle', '#ef4444');
+            }
+        }
+
+        async function manageAdminUser(op, extra = {}) {
+            if (!selectedAdminUserId) return;
+            const res = await triggerAdminAction('user_manage', { user_id: selectedAdminUserId, op, ...extra }, true);
+            if (res) await lookupAdminUser();
+        }
+
+        async function saveMaintenanceNotice() {
+            const inp = document.getElementById('admin-maint-msg');
+            const res = await triggerAdminAction('set_maintenance_message', { message: inp.value }, true);
+            if (res) maintDirty = false;
+        }
+
+        document.getElementById('admin-maint-msg').addEventListener('input', () => { maintDirty = true; });
+
+        async function controlBroadcast(actionName) {
+            const msg = document.getElementById('admin-bcast-msg').value.trim();
+            await triggerAdminAction(actionName, { message: msg }, true);
+        }
+
+        async function cancelSingleTaskAdmin(taskId) {
+            await triggerAdminAction('cancel_task', { task_id: taskId }, true);
+        }
+
+        async function controlWorkerNode(workerId, op) {
+            await triggerAdminAction('worker_control', { worker_id: workerId, op }, true);
         }
 
         // --- Hide Loader ---
@@ -1688,10 +2128,14 @@
             ctx.restore();
         }
 
-        // --- 7-Day Volume & Rename History Bar Chart Renderer ---
+        // --- 7-Day & 24-Hour Volume & Rename History Bar Chart Renderer ---
         let historyChartMode = 'combined'; // 'combined' | 'volume' | 'renames'
         let selectedHistoryIdx = -1;
         let userPinnedHistoryDay = false;
+
+        function getActiveHistoryDataset() {
+            return historyRangeMode === '24h' ? latestAnalytics24h : latestAnalytics7d;
+        }
 
         function formatCompactNumber(num) {
             const n = Number(num || 0);
@@ -1710,8 +2154,22 @@
             return '0G';
         }
 
-        function parseDayAxisLabels(day, idx, totalDays, isCompact) {
+        function parseDayAxisLabels(day, idx, totalDays, isCompact, colW = 40) {
             const isToday = idx === totalDays - 1;
+            if (historyRangeMode === '24h') {
+                const hr = day.hour || day.label || '';
+                const minLabelSpacingPx = 46;
+                const stride = Math.max(3, Math.ceil(minLabelSpacingPx / Math.max(1, colW)));
+                const minGapBeforeNow = Math.ceil(38 / Math.max(1, colW));
+                const showRegularTick = (idx % stride === 0) && ((totalDays - 1 - idx) >= minGapBeforeNow);
+                const showTick = showRegularTick || isToday;
+
+                return {
+                    top: showTick ? (isToday ? 'NOW' : hr) : '',
+                    bottom: showTick ? (isToday ? 'LIVE' : 'UTC') : '',
+                    isToday
+                };
+            }
             let weekday = '';
             let dayNum = '';
             if (day.date && /^\d{4}-\d{2}-\d{2}$/.test(day.date)) {
@@ -1737,7 +2195,8 @@
         }
 
         function updateHistoryInspector(idx) {
-            const days = latestAnalytics7d.days || [];
+            const activeData = getActiveHistoryDataset();
+            const days = activeData.days || [];
             const dateEl = document.getElementById('insp-date');
             const gbEl = document.getElementById('insp-gb');
             const renEl = document.getElementById('insp-renames');
@@ -1747,7 +2206,7 @@
             const safeIdx = (idx >= 0 && idx < days.length) ? idx : days.length - 1;
             const day = days[safeIdx];
             const isToday = safeIdx === days.length - 1;
-            const labelTag = isToday ? 'Today (UTC)' : (day.label || '');
+            const labelTag = isToday ? (historyRangeMode === '24h' ? 'Current Hour (UTC)' : 'Today (UTC)') : (day.label || '');
 
             dateEl.innerText = labelTag ? `${day.date} • ${labelTag}` : day.date;
             gbEl.innerText = `${Number(day.gb_transferred || 0).toFixed(2)} GB`;
@@ -1775,21 +2234,39 @@
             ctx.fill();
         }
 
-        function applyAnalytics7dUpdate(data) {
-            if (!data || !Array.isArray(data.days)) return;
-            latestAnalytics7d = data;
+        function refreshHistoryUI() {
+            const activeData = getActiveHistoryDataset();
+            const tag = historyRangeMode.toUpperCase();
+            document.getElementById('history-card-heading').innerText =
+                historyRangeMode === '24h' ? '24-Hour Volume & Rename History' : '7-Day Volume & Rename History';
+            document.getElementById('lbl-range-gb').innerText = tag;
+            document.getElementById('lbl-range-ren').innerText = tag;
+            document.getElementById('lbl-range-peak').innerText = tag;
 
-            if (data.summary) {
-                document.getElementById('val-7d-gb').innerText = `${Number(data.summary.total_gb || 0).toFixed(2)} GB`;
-                document.getElementById('val-7d-renames').innerText = data.summary.total_renames_short ?? data.summary.total_renames ?? '0';
-                document.getElementById('val-7d-peak').innerText = data.summary.peak_active_tasks ?? 0;
+            if (activeData && activeData.summary) {
+                document.getElementById('val-7d-gb').innerText = `${Number(activeData.summary.total_gb || 0).toFixed(2)} GB`;
+                document.getElementById('val-7d-renames').innerText = activeData.summary.total_renames_short ?? activeData.summary.total_renames ?? '0';
+                document.getElementById('val-7d-peak').innerText = activeData.summary.peak_active_tasks ?? 0;
             }
 
-            if (data.days.length > 0 && (!userPinnedHistoryDay || selectedHistoryIdx < 0 || selectedHistoryIdx >= data.days.length)) {
-                selectedHistoryIdx = data.days.length - 1;
+            const days = (activeData && activeData.days) || [];
+            if (days.length > 0 && (!userPinnedHistoryDay || selectedHistoryIdx < 0 || selectedHistoryIdx >= days.length)) {
+                selectedHistoryIdx = days.length - 1;
             }
             updateHistoryInspector(selectedHistoryIdx);
             draw7DayHistoryChart();
+        }
+
+        function applyAnalytics7dUpdate(data) {
+            if (!data || !Array.isArray(data.days)) return;
+            latestAnalytics7d = data;
+            if (historyRangeMode === '7d') refreshHistoryUI();
+        }
+
+        function applyAnalytics24hUpdate(data) {
+            if (!data || !Array.isArray(data.days)) return;
+            latestAnalytics24h = data;
+            if (historyRangeMode === '24h') refreshHistoryUI();
         }
 
         function getHistoryChartGeometry(rect) {
@@ -1805,7 +2282,7 @@
         function draw7DayHistoryChart() {
             const canvas = document.getElementById('history-7d-canvas');
             if (!canvas) return;
-            const days = latestAnalytics7d.days || [];
+            const days = getActiveHistoryDataset().days || [];
             const dpr = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0) return;
@@ -1824,7 +2301,7 @@
                 ctx.fillStyle = '#64748b';
                 ctx.font = '12px Inter, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('Collecting 7-day MongoDB rollup metrics...', rect.width / 2, rect.height / 2);
+                ctx.fillText('Collecting MongoDB rollup metrics...', rect.width / 2, rect.height / 2);
                 ctx.restore();
                 return;
             }
@@ -1840,7 +2317,7 @@
             const gridSteps = 3;
             ctx.font = '500 10px "JetBrains Mono", monospace';
             for (let i = 0; i <= gridSteps; i++) {
-                const ratio = i / gridSteps; // 0 = top, 1 = bottom
+                const ratio = i / gridSteps;
                 const gy = Math.round(padTop + chartH * ratio) + 0.5;
 
                 ctx.strokeStyle = i === gridSteps ? 'rgba(148, 163, 184, 0.26)' : 'rgba(148, 163, 184, 0.09)';
@@ -1883,14 +2360,13 @@
                 const centerX = colLeft + colW / 2;
                 const isSelected = idx === activeIdx;
 
-                // Selected / hovered column highlight: top-rounded pill ending flush at baseY
                 if (isSelected) {
-                    const selX = colLeft + 2;
-                    const selW = Math.max(0, colW - 4);
+                    const selX = colLeft + 1;
+                    const selW = Math.max(0, colW - 2);
                     const selH = chartH + 8;
-                    drawTopRoundedBar(ctx, selX, baseY, selW, selH, 8, 'rgba(59, 130, 246, 0.11)');
+                    drawTopRoundedBar(ctx, selX, baseY, selW, selH, 5, 'rgba(59, 130, 246, 0.12)');
 
-                    buildTopRoundedPath(ctx, selX, baseY, selW, selH, 8);
+                    buildTopRoundedPath(ctx, selX, baseY, selW, selH, 5);
                     ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
                     ctx.lineWidth = 1;
                     ctx.stroke();
@@ -1902,10 +2378,12 @@
                 const hasActivity = gbVal > 0 || renVal > 0 || peakVal > 0;
 
                 if (historyChartMode === 'combined') {
-                    const barGap = Math.max(3, Math.min(6, colW * 0.08));
-                    const barW = Math.max(7, Math.min(22, (colW - barGap * 3) / 2));
-                    const gbH = gbVal > 0 ? Math.min(chartH, Math.max(6, (gbVal / maxGb) * chartH)) : 0;
-                    const renH = renVal > 0 ? Math.min(chartH, Math.max(6, (renVal / maxRenames) * chartH)) : 0;
+                    const barGap = colW < 12 ? 1 : Math.max(2, Math.min(6, colW * 0.08));
+                    const maxPairW = Math.max(4, colW - (colW < 12 ? 1.5 : barGap * 2));
+                    const barW = Math.max(2, Math.min(22, (maxPairW - barGap) / 2));
+                    const barRadius = colW < 12 ? 2 : 4;
+                    const gbH = gbVal > 0 ? Math.min(chartH, Math.max(4, (gbVal / maxGb) * chartH)) : 0;
+                    const renH = renVal > 0 ? Math.min(chartH, Math.max(4, (renVal / maxRenames) * chartH)) : 0;
                     const leftBarX = centerX - barW - barGap / 2;
                     const rightBarX = centerX + barGap / 2;
 
@@ -1913,18 +2391,18 @@
                         const gbGrad = ctx.createLinearGradient(0, baseY - gbH, 0, baseY);
                         gbGrad.addColorStop(0, '#34d399');
                         gbGrad.addColorStop(1, '#059669');
-                        drawTopRoundedBar(ctx, leftBarX, baseY, barW, gbH, 5, gbGrad);
+                        drawTopRoundedBar(ctx, leftBarX, baseY, barW, gbH, barRadius, gbGrad);
                     }
 
                     if (renH > 0) {
                         const renGrad = ctx.createLinearGradient(0, baseY - renH, 0, baseY);
                         renGrad.addColorStop(0, '#c084fc');
                         renGrad.addColorStop(1, '#7c3aed');
-                        drawTopRoundedBar(ctx, rightBarX, baseY, barW, renH, 5, renGrad);
+                        drawTopRoundedBar(ctx, rightBarX, baseY, barW, renH, barRadius, renGrad);
                     }
 
                     const highestH = Math.max(gbH, renH);
-                    if (peakVal > 0) {
+                    if (peakVal > 0 && historyRangeMode === '7d') {
                         const rawBadgeY = baseY - highestH - 6;
                         const badgeY = Math.max(padTop - 2, Math.min(baseY - 11, rawBadgeY));
                         ctx.font = isCompact
@@ -1933,64 +2411,84 @@
                         ctx.textAlign = 'center';
                         ctx.fillStyle = '#60a5fa';
                         ctx.fillText(`⚡${peakVal}`, centerX, badgeY, colW - 2);
-                    } else if (!hasActivity) {
+                    } else if (!hasActivity && historyRangeMode === '7d') {
                         ctx.font = '500 10px "JetBrains Mono", monospace';
                         ctx.textAlign = 'center';
                         ctx.fillStyle = 'rgba(100, 116, 139, 0.55)';
                         ctx.fillText('—', centerX, baseY - 10, colW - 4);
                     }
                 } else {
-                    // Single focused bar mode ('volume' or 'renames') with direct value label above bar
                     const isVol = historyChartMode === 'volume';
                     const val = isVol ? gbVal : renVal;
                     const maxScale = isVol ? maxGb : maxRenames;
-                    const barW = Math.max(14, Math.min(34, colW * 0.52));
-                    const barH = val > 0 ? Math.min(chartH, Math.max(6, (val / maxScale) * chartH)) : 0;
+                    const barW = Math.max(3, Math.min(34, colW * 0.62));
+                    const barRadius = colW < 12 ? 2.5 : 5;
+                    const barH = val > 0 ? Math.min(chartH, Math.max(4, (val / maxScale) * chartH)) : 0;
                     const barX = centerX - barW / 2;
 
                     if (barH > 0) {
                         const grad = ctx.createLinearGradient(0, baseY - barH, 0, baseY);
                         grad.addColorStop(0, isVol ? '#34d399' : '#c084fc');
                         grad.addColorStop(1, isVol ? '#059669' : '#7c3aed');
-                        drawTopRoundedBar(ctx, barX, baseY, barW, barH, 6, grad);
+                        drawTopRoundedBar(ctx, barX, baseY, barW, barH, barRadius, grad);
                     }
 
-                    ctx.font = isCompact
-                        ? '700 9px "JetBrains Mono", monospace'
-                        : '700 10px "JetBrains Mono", monospace';
-                    ctx.textAlign = 'center';
-                    if (val > 0) {
-                        ctx.fillStyle = isVol ? '#6ee7b7' : '#e9d5ff';
-                        const labelStr = isVol ? formatCompactGb(val) : formatCompactNumber(val);
-                        const labelY = Math.max(padTop - 2, Math.min(baseY - 11, baseY - barH - 6));
-                        ctx.fillText(labelStr, centerX, labelY, colW - 2);
-                    } else {
-                        ctx.fillStyle = 'rgba(100, 116, 139, 0.55)';
-                        ctx.fillText('—', centerX, baseY - 10, colW - 4);
+                    if (historyRangeMode === '7d') {
+                        ctx.font = isCompact
+                            ? '700 9px "JetBrains Mono", monospace'
+                            : '700 10px "JetBrains Mono", monospace';
+                        ctx.textAlign = 'center';
+                        if (val > 0) {
+                            ctx.fillStyle = isVol ? '#6ee7b7' : '#e9d5ff';
+                            const labelStr = isVol ? formatCompactGb(val) : formatCompactNumber(val);
+                            const labelY = Math.max(padTop - 2, Math.min(baseY - 11, baseY - barH - 6));
+                            ctx.fillText(labelStr, centerX, labelY, colW - 2);
+                        } else {
+                            ctx.fillStyle = 'rgba(100, 116, 139, 0.55)';
+                            ctx.fillText('—', centerX, baseY - 10, colW - 4);
+                        }
                     }
                 }
 
                 // 2-line X-axis date labels strictly below baseY
-                const axis = parseDayAxisLabels(day, idx, days.length, isCompact);
-                ctx.textAlign = 'center';
-                ctx.font = (axis.isToday || isSelected)
-                    ? '700 10px "JetBrains Mono", monospace'
-                    : '600 10px "JetBrains Mono", monospace';
-                ctx.fillStyle = axis.isToday ? '#60a5fa' : (isSelected ? '#f8fafc' : '#94a3b8');
-                ctx.fillText(axis.top, centerX, baseY + 14, colW - 4);
-
-                ctx.font = '500 9.5px "JetBrains Mono", monospace';
-                ctx.fillStyle = (axis.isToday || isSelected) ? '#cbd5e1' : '#64748b';
-                ctx.fillText(axis.bottom, centerX, baseY + 27, colW - 4);
+                const axis = parseDayAxisLabels(day, idx, days.length, isCompact, colW);
+                if (axis.top) {
+                    ctx.textAlign = 'center';
+                    ctx.font = (axis.isToday || isSelected)
+                        ? '700 9.5px "JetBrains Mono", monospace'
+                        : '600 9.5px "JetBrains Mono", monospace';
+                    ctx.fillStyle = axis.isToday ? '#60a5fa' : (isSelected ? '#f8fafc' : '#94a3b8');
+                    ctx.fillText(axis.top, centerX, baseY + 14);
+                }
+                if (axis.bottom) {
+                    ctx.textAlign = 'center';
+                    ctx.font = '500 9px "JetBrains Mono", monospace';
+                    ctx.fillStyle = (axis.isToday || isSelected) ? '#cbd5e1' : '#64748b';
+                    ctx.fillText(axis.bottom, centerX, baseY + 26);
+                }
             });
 
             ctx.restore();
         }
 
-        // Interactive mode switcher & hover/tap selection on 7-day chart
+        // Interactive mode switcher, 7D/24H range switcher & hover/tap selection
         (function setupHistoryChartInteractions() {
             const canvas = document.getElementById('history-7d-canvas');
             const modeTabs = document.getElementById('history-mode-tabs');
+            const rangeTabs = document.getElementById('history-range-tabs');
+
+            if (rangeTabs) {
+                rangeTabs.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.history-range-btn');
+                    if (!btn) return;
+                    rangeTabs.querySelectorAll('.history-range-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    historyRangeMode = btn.dataset.range || '7d';
+                    userPinnedHistoryDay = false;
+                    selectedHistoryIdx = -1;
+                    refreshHistoryUI();
+                });
+            }
 
             if (modeTabs) {
                 modeTabs.addEventListener('click', (e) => {
@@ -2006,7 +2504,7 @@
             if (!canvas) return;
 
             function resolveDayIndex(clientX) {
-                const days = latestAnalytics7d.days || [];
+                const days = getActiveHistoryDataset().days || [];
                 if (!days.length) return -1;
                 const rect = canvas.getBoundingClientRect();
                 const { padLeft, chartW } = getHistoryChartGeometry(rect);
@@ -2062,7 +2560,7 @@
             else el.classList.add(defaultClass);
         }
 
-        // --- Render Worker Nodes with Live FloodWait Countdowns & Speeds ---
+        // --- Render Worker Nodes with Live FloodWait Countdowns, Speeds & Admin Controls ---
         function renderWorkerNodes(nodes) {
             const grid = document.getElementById('worker-node-grid');
             if (!nodes || nodes.length === 0) {
@@ -2071,19 +2569,34 @@
             }
 
             grid.innerHTML = nodes.map(node => {
+                const isDisabled = Boolean(node.disabled);
                 const isLimited = !node.healthy;
                 const isBusy = node.healthy && node.load > 0;
                 const statusClass = isLimited ? 'limited' : (isBusy ? 'busy' : 'idle');
                 const cardClass = isLimited ? 'node-card rate-limited' : (isBusy ? 'node-card busy-node' : 'node-card');
                 const loadPct = isLimited ? 100 : Math.min(100, node.load * 25);
 
-                const statusLabel = isLimited
-                    ? (node.cooldown_sec > 0 ? `Cooldown: ${formatCooldown(node.cooldown_sec)}` : 'Rate-Limited')
-                    : escapeHtml(node.status);
+                const statusLabel = isDisabled
+                    ? 'Disabled'
+                    : (isLimited
+                        ? (node.cooldown_sec > 0 ? `Cooldown: ${formatCooldown(node.cooldown_sec)}` : 'Rate-Limited')
+                        : escapeHtml(node.status));
 
                 const speedHtml = isBusy
                     ? `<span class="node-speed">${escapeHtml(node.speed || '0 B/s')}</span>`
                     : `<span class="node-speed idle-speed">${node.connected ? '0 B/s' : 'Standby'}</span>`;
+
+                const adminFooter = isAdminSession ? `
+                    <div class="node-admin-bar mono">
+                        <span title="FloodWait incidents (${node.floodwait_total_sec || 0}s total)">FW: ${node.floodwait_count || 0}</span>
+                        <div style="display:flex; gap:0.3rem;">
+                            <button type="button" class="mini-btn ok" style="padding:0.16rem 0.42rem; font-size:0.64rem;" onclick="controlWorkerNode('${node.worker_id}', 'heal')">Heal</button>
+                            ${isDisabled
+                                ? `<button type="button" class="mini-btn ok" style="padding:0.16rem 0.42rem; font-size:0.64rem;" onclick="controlWorkerNode('${node.worker_id}', 'enable')">Enable</button>`
+                                : `<button type="button" class="mini-btn danger" style="padding:0.16rem 0.42rem; font-size:0.64rem;" onclick="controlWorkerNode('${node.worker_id}', 'disable')">Disable</button>`
+                            }
+                        </div>
+                    </div>` : '';
 
                 return `
                     <div class="${cardClass}">
@@ -2098,12 +2611,13 @@
                         <div class="node-bar">
                             <div class="node-bar-fill ${isLimited ? 'limited-bar' : ''}" style="width: ${loadPct}%;"></div>
                         </div>
+                        ${adminFooter}
                     </div>
                 `;
             }).join('');
         }
 
-        // --- Render Telemetry Terminal ---
+        // --- Render Telemetry Terminal (with Privacy Masking + Admin Cancel) ---
         function renderTelemetry(data) {
             latestQueueData = data;
             const term = document.getElementById('queue-terminal');
@@ -2119,11 +2633,22 @@
 
             let itemsHtml = '';
 
+            function buildExtras(t) {
+                const ownerBadge = t.is_owner ? `<span class="q-owner-pill mono">YOUR FILE</span>` : '';
+                const adminUidBadge = (isAdminSession && t.user_id) ? `<span class="q-worker-pill mono">UID: ${escapeHtml(t.user_id)}</span>` : '';
+                const cancelBtn = (isAdminSession && t.task_id)
+                    ? `<button type="button" class="q-cancel-btn mono" onclick="cancelSingleTaskAdmin('${escapeHtml(t.task_id)}')"><i class="fas fa-xmark"></i> Cancel</button>`
+                    : '';
+                const lockPrefix = t.is_masked ? `<i class="fas fa-lock" style="color:var(--text-muted); margin-right:0.35rem; font-size:0.75rem;" title="Filename masked for privacy"></i>` : '';
+                return { ownerBadge, adminUidBadge, cancelBtn, lockPrefix };
+            }
+
             if (activeFilter === 'all' || activeFilter === 'uploading') {
                 upList.forEach(t => {
                     const extBadge = formatExtBadge(t);
                     const workerBadge = t.worker_name ? `<span class="q-worker-pill mono">${escapeHtml(t.worker_name)}</span>` : '';
                     const fname = t.filename || 'Unknown File';
+                    const { ownerBadge, adminUidBadge, cancelBtn, lockPrefix } = buildExtras(t);
                     itemsHtml += `
                         <div class="q-item">
                             <div class="q-top">
@@ -2131,10 +2656,15 @@
                                     <span class="q-tag up"><i class="fas fa-arrow-up"></i> Uploading</span>
                                     ${extBadge}
                                     ${workerBadge}
+                                    ${ownerBadge}
+                                    ${adminUidBadge}
                                 </div>
-                                <span class="q-pct mono">${t.percentage}%</span>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="q-pct mono">${t.percentage}%</span>
+                                    ${cancelBtn}
+                                </div>
                             </div>
-                            <div class="q-filename mono" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
+                            <div class="q-filename mono" title="${escapeHtml(fname)}">${lockPrefix}${escapeHtml(fname)}</div>
                             <div class="q-bar-bg"><div class="q-bar-fill up" style="width: ${t.percentage}%;"></div></div>
                             <div class="q-stats mono">
                                 <span>${escapeHtml(t.current)} / ${escapeHtml(t.total)}</span>
@@ -2149,6 +2679,7 @@
                     const extBadge = formatExtBadge(t);
                     const workerBadge = t.worker_name ? `<span class="q-worker-pill mono">${escapeHtml(t.worker_name)}</span>` : '';
                     const fname = t.filename || 'Unknown File';
+                    const { ownerBadge, adminUidBadge, cancelBtn, lockPrefix } = buildExtras(t);
                     itemsHtml += `
                         <div class="q-item">
                             <div class="q-top">
@@ -2156,10 +2687,15 @@
                                     <span class="q-tag dl"><i class="fas fa-arrow-down"></i> Downloading</span>
                                     ${extBadge}
                                     ${workerBadge}
+                                    ${ownerBadge}
+                                    ${adminUidBadge}
                                 </div>
-                                <span class="q-pct mono">${t.percentage}%</span>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="q-pct mono">${t.percentage}%</span>
+                                    ${cancelBtn}
+                                </div>
                             </div>
-                            <div class="q-filename mono" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
+                            <div class="q-filename mono" title="${escapeHtml(fname)}">${lockPrefix}${escapeHtml(fname)}</div>
                             <div class="q-bar-bg"><div class="q-bar-fill" style="width: ${t.percentage}%;"></div></div>
                             <div class="q-stats mono">
                                 <span>${escapeHtml(t.current)} / ${escapeHtml(t.total)}</span>
@@ -2173,16 +2709,22 @@
                 waitList.forEach(t => {
                     const extBadge = formatExtBadge(t);
                     const fname = t.filename || 'Unknown File';
+                    const { ownerBadge, adminUidBadge, cancelBtn, lockPrefix } = buildExtras(t);
                     itemsHtml += `
                         <div class="q-item" style="opacity: 0.84;">
                             <div class="q-top">
                                 <div class="q-badges">
                                     <span class="q-tag wait"><i class="fas fa-clock"></i> Queued</span>
                                     ${extBadge}
+                                    ${ownerBadge}
+                                    ${adminUidBadge}
                                 </div>
-                                <span class="q-pct mono" style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(t.size || 'Waiting')}</span>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="q-pct mono" style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(t.size || 'Waiting')}</span>
+                                    ${cancelBtn}
+                                </div>
                             </div>
-                            <div class="q-filename mono" style="color: var(--text-secondary);" title="${escapeHtml(fname)}">${escapeHtml(fname)}</div>
+                            <div class="q-filename mono" style="color: var(--text-secondary);" title="${escapeHtml(fname)}">${lockPrefix}${escapeHtml(fname)}</div>
                         </div>`;
                 });
             }
@@ -2225,6 +2767,30 @@
                 pauseBtn.classList.remove('paused-active');
                 pauseBtn.querySelector('i').className = 'fas fa-pause';
                 pauseBtnLabel.innerText = 'Pause Intake';
+            }
+
+            if (data.is_admin) {
+                const maintEl = document.getElementById('admin-maint-msg');
+                if (maintEl && !maintDirty && document.activeElement !== maintEl) {
+                    maintEl.value = data.maintenance_message || '';
+                }
+                if (data.broadcast) {
+                    const b = data.broadcast;
+                    const bStatus = document.getElementById('admin-bcast-status');
+                    const bStart = document.getElementById('btn-bcast-start');
+                    const bCancel = document.getElementById('btn-bcast-cancel');
+                    if (b.running) {
+                        bStatus.innerText = `${b.sent} sent / ${b.failed} err / ${b.total}`;
+                        bStart.disabled = true;
+                        bCancel.style.display = 'inline-block';
+                    } else {
+                        bStart.disabled = false;
+                        bCancel.style.display = 'none';
+                        if (b.total > 0) {
+                            bStatus.innerText = `Done: ${b.sent}/${b.total} (${b.failed} err)`;
+                        }
+                    }
+                }
             }
 
             document.getElementById('val-bot_uptime').innerText = data.bot_uptime;
@@ -2304,15 +2870,17 @@
             document.getElementById('last-sync-time').innerText = now.toTimeString().split(' ')[0];
         }
 
-        // --- Initial 7-Day History Fetch ---
+        // --- Initial 7-Day & 24-Hour History Fetch ---
         async function fetchInitial7dAnalytics() {
             try {
-                const res = await fetch('/api/analytics/7d');
-                if (res.ok) {
-                    applyAnalytics7dUpdate(await res.json());
-                }
+                const [res7d, res24h] = await Promise.all([
+                    fetch('/api/analytics/7d'),
+                    fetch('/api/analytics/24h')
+                ]);
+                if (res7d.ok) applyAnalytics7dUpdate(await res7d.json());
+                if (res24h.ok) applyAnalytics24hUpdate(await res24h.json());
             } catch (err) {
-                console.error('7d analytics fetch error:', err);
+                console.error('Analytics fetch error:', err);
             }
         }
 
@@ -2323,14 +2891,17 @@
             if (fallbackInterval) return;
             fallbackInterval = setInterval(async () => {
                 try {
-                    const [sRes, qRes, aRes] = await Promise.all([
-                        fetch('/api/status'),
-                        fetch('/api/queue'),
-                        fetch('/api/analytics/7d')
+                    const headers = getAuthHeaders();
+                    const [sRes, qRes, aRes, hRes] = await Promise.all([
+                        fetch('/api/status', { headers }),
+                        fetch('/api/queue', { headers }),
+                        fetch('/api/analytics/7d'),
+                        fetch('/api/analytics/24h')
                     ]);
                     if (sRes.ok) applyStatusUpdate(await sRes.json());
                     if (qRes.ok) renderTelemetry(await qRes.json());
                     if (aRes.ok) applyAnalytics7dUpdate(await aRes.json());
+                    if (hRes.ok) applyAnalytics24hUpdate(await hRes.json());
                 } catch (err) {
                     console.error('Fallback polling error:', err);
                 }
@@ -2355,7 +2926,10 @@
                 return;
             }
 
-            const evtSource = new EventSource('/api/stream');
+            const streamUrl = tmaInitData
+                ? `/api/stream?initData=${encodeURIComponent(tmaInitData)}`
+                : '/api/stream';
+            const evtSource = new EventSource(streamUrl);
 
             evtSource.onopen = () => {
                 pill.className = 'stream-pill';
@@ -2369,6 +2943,7 @@
                     if (payload.status) applyStatusUpdate(payload.status);
                     if (payload.queue) renderTelemetry(payload.queue);
                     if (payload.analytics_7d) applyAnalytics7dUpdate(payload.analytics_7d);
+                    if (payload.analytics_24h) applyAnalytics24hUpdate(payload.analytics_24h);
                 } catch (err) {
                     console.error('SSE parse error:', err);
                 }
