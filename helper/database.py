@@ -12,13 +12,13 @@ Copyright (c) 2025 @Digital_Botz
 """
 
 # database imports
-import datetime, time, pytz
+import datetime, time, pytz, re
 from typing import Optional, List
 from pymongo import AsyncMongoClient 
 from pydantic import BaseModel, Field
 from beanie import Document, init_beanie
 from config import Config
-from helper.utils import send_log
+from helper.utils import send_log, humanbytes
 
 # ==========================================
 # --- BEANIE & PYDANTIC MODELS ---
@@ -96,6 +96,10 @@ class Database:
         await init_beanie(database=self.db, document_models=[User, BotStats, Task])
         print("✅ Database Layer Initialized via Beanie/Pydantic")
 
+    def get_free_upload_limit(self) -> int:
+        """Reads FREE_UPLOAD_LIMIT from Config with safe fallback to 6 GiB."""
+        return int(getattr(Config, "FREE_UPLOAD_LIMIT", 6442450944))
+
     async def add_user(self, b, m):
         from helper.utils import send_log
         u = m.from_user
@@ -128,6 +132,24 @@ class Database:
     async def delete_user(self, user_id: int):
         user = await User.get(user_id)
         if user: await user.delete()
+
+    async def find_user_by_query(self, query: str) -> Optional[dict]:
+        """Finds a user document by numeric user_id or @username."""
+        clean = str(query or "").strip()
+        if not clean:
+            return None
+        if clean.isdigit():
+            doc = await self.db["user"].find_one({"_id": int(clean)})
+            if doc:
+                return doc
+        uname = clean.lstrip("@")
+        if uname:
+            doc = await self.db["user"].find_one(
+                {"username": {"$regex": f"^{re.escape(uname)}$", "$options": "i"}}
+            )
+            if doc:
+                return doc
+        return None
 
     # ==========================================
     # --- BULLETPROOF GETTERS & SETTERS ---
@@ -299,8 +321,8 @@ class Database:
             user.last_upload_date = today
             await user.save()
             
-        FREE_LIMIT = 6 * 1024 * 1024 * 1024 
-        return (user.daily_upload_bytes + file_size) <= FREE_LIMIT
+        free_limit = self.get_free_upload_limit()
+        return (user.daily_upload_bytes + file_size) <= free_limit
 
     async def update_daily_limit(self, user_id: int, file_size: int):
         user = await User.get(user_id)
@@ -319,6 +341,89 @@ class Database:
         # ------------------------------------
         
         await user.save()
+
+    async def get_user_plan_stats(self, user_id: int) -> dict:
+        """Returns normalized plan type, today's usage, and remaining quota for both Free and Premium users."""
+        free_limit = self.get_free_upload_limit()
+        is_premium = await self.check_premium(user_id)
+        user = await User.get(user_id)
+
+        tz = pytz.timezone("Africa/Nairobi")
+        today = datetime.datetime.now(tz).date().isoformat()
+
+        daily_used = 0
+        lifetime_used = 0
+        expiry_str = None
+
+        if user:
+            if user.last_upload_date != today:
+                user.daily_upload_bytes = 0
+                user.last_upload_date = today
+                await user.save()
+            daily_used = int(user.daily_upload_bytes or 0)
+            lifetime_used = int(getattr(user, "lifetime_upload_bytes", 0) or 0)
+            expiry_str = user.premium_expiry
+
+        if is_premium:
+            expiry_formatted = "Lifetime ♾️"
+            remaining_time = "Unlimited ♾️"
+            is_lifetime = True
+            if expiry_str:
+                is_lifetime = False
+                try:
+                    expiry_dt = datetime.datetime.fromisoformat(expiry_str)
+                except ValueError:
+                    expiry_dt = datetime.datetime.combine(datetime.date.fromisoformat(expiry_str), datetime.time(23, 59, 59))
+                expiry_formatted = expiry_dt.strftime("%d %B %Y - %I:%M %p")
+                diff = expiry_dt - datetime.datetime.now()
+                if diff.total_seconds() > 0:
+                    days = diff.days
+                    hours, rem = divmod(diff.seconds, 3600)
+                    minutes, _ = divmod(rem, 60)
+                    remaining_time = f"{days}d {hours}h {minutes}m"
+                else:
+                    remaining_time = "0d 0h 0m"
+
+            return {
+                "user_id": user_id,
+                "is_premium": True,
+                "is_lifetime": is_lifetime,
+                "plan_name": "Premium Lifetime" if is_lifetime else "Premium",
+                "daily_used": daily_used,
+                "daily_used_human": humanbytes(daily_used) if daily_used > 0 else "0 B",
+                "lifetime_used": lifetime_used,
+                "lifetime_used_human": humanbytes(lifetime_used) if lifetime_used > 0 else "0 B",
+                "daily_limit": None,
+                "daily_limit_human": "Unlimited",
+                "remaining_bytes": None,
+                "remaining_human": "Unlimited",
+                "usage_pct": 0.0,
+                "expiry_formatted": expiry_formatted,
+                "remaining_time": remaining_time,
+                "max_file_size_human": "4 GB+"
+            }
+
+        remaining_bytes = max(0, free_limit - daily_used)
+        usage_pct = min(100.0, round((daily_used / free_limit) * 100, 1)) if free_limit > 0 else 0.0
+
+        return {
+            "user_id": user_id,
+            "is_premium": False,
+            "is_lifetime": False,
+            "plan_name": "Free Plan",
+            "daily_used": daily_used,
+            "daily_used_human": humanbytes(daily_used) if daily_used > 0 else "0 B",
+            "lifetime_used": lifetime_used,
+            "lifetime_used_human": humanbytes(lifetime_used) if lifetime_used > 0 else "0 B",
+            "daily_limit": free_limit,
+            "daily_limit_human": humanbytes(free_limit),
+            "remaining_bytes": remaining_bytes,
+            "remaining_human": humanbytes(remaining_bytes) if remaining_bytes > 0 else "0 B",
+            "usage_pct": usage_pct,
+            "expiry_formatted": "No Expiry",
+            "remaining_time": "Resets 00:00 EAT",
+            "max_file_size_human": "2 GB"
+        }
 
     # ==========================================
     # --- GLOBAL MIDNIGHT RESETTER ---
