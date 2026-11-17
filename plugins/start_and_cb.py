@@ -65,7 +65,9 @@ def get_uptime(start_time):
     return uptime_str.strip()
 
 # --- PREMIUM UTILS ---
-PREMIUM_TEXT = """**💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ**
+def get_premium_text():
+    free_limit_str = humanbytes(getattr(Config, "FREE_UPLOAD_LIMIT", 6442450944))
+    return f"""**💎 Pʀᴇᴍɪᴜᴍ Pʟᴀɴꜱ**
 
 Upgrade to Premium to enjoy high-speed renaming without limits!
 
@@ -77,7 +79,7 @@ Upgrade to Premium to enjoy high-speed renaming without limits!
 
 **Features:**
 ✅ Upload Files up to 4GB+
-✅ No Daily 6GB Limit
+✅ No Daily {free_limit_str} Limit
 ✅ Priority Task Processing
 ✅ 24/7 Support
 
@@ -95,9 +97,9 @@ async def myplan_cmd(client, message):
     if not user_data:
         return await message.reply_text("❌ **User data not found. Please /start the bot first.**")
 
-    is_premium = await digital_botz.check_premium(user_id)
+    plan_stats = await digital_botz.get_user_plan_stats(user_id)
     
-    if is_premium:
+    if plan_stats["is_premium"]:
         expiry_str = user_data.get('premium_expiry')
         if expiry_str:
             try:
@@ -123,7 +125,9 @@ async def myplan_cmd(client, message):
                 f"🆔 **Uꜱᴇʀ ID:** `{user_id}`\n"
                 "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ 💎`\n"
                 f"📅 **Exᴩɪʀy Dᴀᴛᴇ:** `{expiry_datetime.strftime('%d %B %Y - %I:%M %p')}`\n"
-                f"⏳ **Rᴇᴍᴀɪɴɪɴɢ Tɪᴍᴇ:** `{remaining_str}`\n\n"
+                f"⏳ **Rᴇᴍᴀɪɴɪɴɢ Tɪᴍᴇ:** `{remaining_str}`\n"
+                f"📈 **Uꜱᴇᴅ Tᴏᴅᴀy:** `{plan_stats['daily_used_human']}`\n"
+                "🔋 **Rᴇᴍᴀɪɴɪɴɢ Qᴜᴏᴛᴀ:** `Uɴʟɪᴍɪᴛᴇᴅ ♾️`\n\n"
                 "**🚀 Eɴᴊᴏy Yᴏᴜʀ Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ!**"
             )
         else:
@@ -132,7 +136,9 @@ async def myplan_cmd(client, message):
                 f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
                 f"🆔 **Uꜱᴇʀ ID:** `{user_id}`\n"
                 "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ᴘʀᴇᴍɪᴜᴍ ʟɪғᴇᴛɪᴍᴇ ♾️`\n"
-                "🚀 **Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ Fᴏʀᴇᴠᴇʀ!**"
+                f"📈 **Uꜱᴇᴅ Tᴏᴅᴀy:** `{plan_stats['daily_used_human']}`\n"
+                "🔋 **Rᴇᴍᴀɪɴɪɴɢ Qᴜᴏᴛᴀ:** `Uɴʟɪᴍɪᴛᴇᴅ ♾️`\n\n"
+                "**🚀 Uɴʟɪᴍɪᴛᴇᴅ Aᴄᴄᴇꜱꜱ Fᴏʀᴇᴠᴇʀ!**"
             )
         
         await message.reply_text(text)
@@ -143,7 +149,9 @@ async def myplan_cmd(client, message):
             f"👤 **Uꜱᴇʀ:** {message.from_user.mention}\n"
             "🏆 **Pʟᴀɴ Tyᴩᴇ:** `ғʀᴇᴇ ᴜsᴇʀ ✅`\n"
             "📅 **Exᴩɪʀy Dᴀᴛᴇ:** `ɴᴏ ᴇxᴘɪʀʏ`\n"
-            "📊 **Dᴀɪʟy Lɪᴍɪᴛ:** `6ɢʙ / ᴅᴀʏ`\n"
+            f"📊 **Dᴀɪʟy Lɪᴍɪᴛ:** `{plan_stats['daily_limit_human']} / ᴅᴀʏ`\n"
+            f"📈 **Uꜱᴇᴅ Tᴏᴅᴀy:** `{plan_stats['daily_used_human']}`\n"
+            f"🔋 **Rᴇᴍᴀɪɴɪɴɢ Tᴏᴅᴀy:** `{plan_stats['remaining_human']}`\n"
             "📂 **Mᴀx Fɪʟᴇ Sɪᴢᴇ:** `2ɢʙ`\n\n"
             "**🌟 Uᴩɢʀᴀᴅᴇ ᴛᴏ Pʀᴇᴍɪᴜᴍ ꜰᴏʀ 4GB+ Uᴩʟᴏᴀᴅꜱ ᴀɴᴅ Uɴʟɪᴍɪᴛᴇᴅ Dᴀɪʟy Uꜱᴀɢᴇ!**"
         )
@@ -154,7 +162,7 @@ async def myplan_cmd(client, message):
 async def plans_cmd(client, message):
     btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266, style=ButtonStyle.SUCCESS)],
            [InlineKeyboardButton("✖️ Cʟᴏꜱᴇ", callback_data="close", style=ButtonStyle.DANGER)]]
-    await message.reply_text(PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
+    await message.reply_text(get_premium_text(), reply_markup=InlineKeyboardMarkup(btn))
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
@@ -223,7 +231,7 @@ async def cb_handler(client, query: CallbackQuery):
     elif data == "premium_plans":
         btn = [[InlineKeyboardButton("💳 Buy Premium", user_id=6318135266, style=ButtonStyle.SUCCESS)],
                [InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="start", style=ButtonStyle.DANGER)]]
-        await query.message.edit_text(text=PREMIUM_TEXT, reply_markup=InlineKeyboardMarkup(btn))
+        await query.message.edit_text(text=get_premium_text(), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "thumbnail":
         await query.message.edit_text(text=rkn.THUMBNAIL, disable_web_page_preview=True, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" Bᴀᴄᴋ", callback_data = "help", style=ButtonStyle.DANGER)]])) 

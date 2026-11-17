@@ -30,6 +30,7 @@ from plugins.auto_rename import EnhancedAutoRenamer
 
 # extra imports
 from asyncio import sleep
+from datetime import datetime, timezone
 import os, time, asyncio, re, shutil
 
 UPLOAD_TEXT = """Uploading Started...."""
@@ -49,7 +50,10 @@ upload_lock = asyncio.Lock()
 # ==========================================
 active_progress = {}
 last_ui_update = {}
+cancelled_tasks = set()
 queue_paused = False  # Controlled via Telegram Mini App Admin Console
+maintenance_message = ""  # Optional custom notice shown when queue_paused is active
+active_bot_client = None  # Reference to main bot Client for web_support admin tools
 
 
 def _get_admin_ids():
@@ -63,13 +67,41 @@ def _get_admin_ids():
     return set()
 
 
-async def custom_progress(current, total, text, message, start, task_id, filename, worker_id=None):
+def record_worker_floodwait(worker, wait_seconds: int, phase: str = "transfer"):
+    """Records per-worker FloodWait incidents so admins can spot rate-limited accounts."""
+    if worker is None:
+        return
+    try:
+        secs = max(1, int(wait_seconds or 1))
+        worker.floodwait_count = int(getattr(worker, "floodwait_count", 0) or 0) + 1
+        worker.floodwait_total_sec = int(getattr(worker, "floodwait_total_sec", 0) or 0) + secs
+        history = getattr(worker, "floodwait_history", None)
+        if not isinstance(history, list):
+            history = []
+            worker.floodwait_history = history
+        history.append({
+            "timestamp": int(time.time()),
+            "time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "seconds": secs,
+            "phase": str(phase)
+        })
+        if len(history) > 25:
+            del history[:-25]
+    except Exception:
+        pass
+
+
+async def custom_progress(current, total, text, message, start, task_id, filename, worker_id=None, user_id=None):
     """Intercepts progress to update the live web dashboard while maintaining Telegram updates."""
+    tid_str = str(task_id)
+    if tid_str in cancelled_tasks:
+        raise asyncio.CancelledError("Task cancelled by admin")
+
     percentage = round((current / total) * 100, 2) if total else 0
     diff = time.time() - start
     speed = current / diff if diff > 0 else 0
 
-    active_progress[str(task_id)] = {
+    active_progress[tid_str] = {
         "filename": filename,
         "status": "Downloading" if "Down" in text else "Uploading",
         "percentage": percentage,
@@ -77,13 +109,14 @@ async def custom_progress(current, total, text, message, start, task_id, filenam
         "speed_bps": round(speed, 2),
         "current": humanbytes(current),
         "total": humanbytes(total),
-        "worker_id": worker_id
+        "worker_id": worker_id,
+        "user_id": user_id
     }
 
     if message:
         now = time.time()
-        if now - last_ui_update.get(str(task_id), 0) > 2.0 or current == total:
-            last_ui_update[str(task_id)] = now
+        if now - last_ui_update.get(tid_str, 0) > 2.0 or current == total:
+            last_ui_update[tid_str] = now
             try:
                 asyncio.create_task(progress_for_wzgram(current, total, text, message, start))
             except Exception:
@@ -134,13 +167,19 @@ def get_least_busy_worker(main_client):
 
     now = time.time()
     for w in workers:
+        if getattr(w, "is_disabled", False):
+            w.is_healthy = False
+            continue
         if not getattr(w, "is_healthy", True):
             unhealthy_until = float(getattr(w, "unhealthy_until", 0) or 0)
             if unhealthy_until > 0 and now >= unhealthy_until:
                 w.is_healthy = True
                 w.unhealthy_until = 0
 
-    healthy_workers = [w for w in workers if getattr(w, "is_healthy", True)]
+    healthy_workers = [
+        w for w in workers
+        if getattr(w, "is_healthy", True) and not getattr(w, "is_disabled", False)
+    ]
     if not healthy_workers:
         return main_client
 
@@ -162,26 +201,151 @@ def get_least_busy_worker(main_client):
 
 
 # ==========================================
-# --- SAFE DELETE TRACKER ---
+# --- SAFE DELETE & ADMIN CANCELLATION ---
 # ==========================================
 async def safe_delete_task(task_id, user_id, client):
     try:
-        raw_task = await digital_botz.db["tasks"].find_one({"_id": task_id})
-        if raw_task:
-            if raw_task.get("processing_msg_id", 0) != 0:
+        task_doc = await Task.get(task_id)
+        if task_doc:
+            if client and getattr(task_doc, "processing_msg_id", 0) != 0:
                 try:
-                    await client.delete_messages(user_id, raw_task["processing_msg_id"])
+                    await client.delete_messages(user_id, task_doc.processing_msg_id)
                 except Exception:
                     pass
 
-            if raw_task.get("log_msg_id", 0) != 0:
+            if client and getattr(task_doc, "log_msg_id", 0) != 0:
                 try:
-                    await client.delete_messages(Config.LOG_CHANNEL, raw_task["log_msg_id"])
+                    await client.delete_messages(Config.LOG_CHANNEL, task_doc.log_msg_id)
                 except Exception:
                     pass
+            await task_doc.delete()
+            return
     except Exception:
         pass
     await digital_botz.delete_task(task_id)
+
+
+async def cancel_single_task(task_id_str: str, main_client=None) -> tuple[bool, str]:
+    """Cancels a pending, staged, or actively transferring task by task_id."""
+    tid_str = str(task_id_str or "").strip()
+    if not tid_str:
+        return False, "Missing task_id"
+
+    bot_client = main_client or active_bot_client
+    cancelled_tasks.add(tid_str)
+
+    # 1. Check pending queue in manager.user_tasks
+    for uid, u_tasks in list(manager.user_tasks.items()):
+        lock = await manager.get_lock(uid)
+        async with lock:
+            for idx, item in enumerate(u_tasks):
+                if str(item.get("task_id")) == tid_str:
+                    removed = u_tasks.pop(idx)
+                    if uid in manager.batch_state:
+                        manager.batch_state[uid]["total_files"] = max(
+                            manager.batch_state[uid]["processed"],
+                            manager.batch_state[uid]["total_files"] - 1
+                        )
+                    await safe_delete_task(removed["task_id"], uid, bot_client)
+                    cancelled_tasks.discard(tid_str)
+                    if uid in manager.upload_events:
+                        manager.upload_events[uid].set()
+                    return True, f"Removed queued task {tid_str}."
+
+    # 2. Check staged items waiting for ordered upload
+    for uid, staged_list in list(manager.staging_pool.items()):
+        lock = await manager.get_lock(uid)
+        async with lock:
+            for idx, data in enumerate(staged_list):
+                if str(data.get("task_id")) == tid_str:
+                    removed = staged_list.pop(idx)
+                    if removed.get("rkn_processing"):
+                        try:
+                            await removed["rkn_processing"].delete()
+                        except Exception:
+                            pass
+                    await remove_path(removed.get("ph_path"), removed.get("file_path"))
+                    shutil.rmtree(f"Renames/{tid_str}", ignore_errors=True)
+                    if uid in manager.batch_state:
+                        manager.batch_state[uid]["total_files"] = max(
+                            manager.batch_state[uid]["processed"],
+                            manager.batch_state[uid]["total_files"] - 1
+                        )
+                    await safe_delete_task(removed["task_id"], uid, bot_client)
+                    cancelled_tasks.discard(tid_str)
+                    if uid in manager.upload_events:
+                        manager.upload_events[uid].set()
+                    return True, f"Cancelled staged task {tid_str}."
+
+    # 3. Check actively running transfer
+    prog_entry = active_progress.pop(tid_str, None)
+    last_ui_update.pop(tid_str, None)
+    shutil.rmtree(f"Renames/{tid_str}", ignore_errors=True)
+
+    try:
+        task_doc = await Task.get(tid_str)
+        if task_doc:
+            await safe_delete_task(task_doc.id, task_doc.user_id, bot_client)
+            return True, f"Aborted active task {tid_str}."
+    except Exception:
+        pass
+
+    if prog_entry:
+        return True, f"Aborted active transfer {tid_str}."
+
+    cancelled_tasks.discard(tid_str)
+    return False, "Task not found or already finished."
+
+
+async def cancel_user_tasks(target_user_id: int, main_client=None) -> int:
+    """Cancels and clears all pending, staged, active, and DB tasks for a specific user."""
+    uid = int(target_user_id)
+    bot_client = main_client or active_bot_client
+    cleared = 0
+
+    # Mark active progress tasks for this user as cancelled
+    for tid_str, prog in list(active_progress.items()):
+        if prog.get("user_id") == uid:
+            cancelled_tasks.add(tid_str)
+            active_progress.pop(tid_str, None)
+            last_ui_update.pop(tid_str, None)
+            shutil.rmtree(f"Renames/{tid_str}", ignore_errors=True)
+            cleared += 1
+
+    # Clear pending & staged queues
+    lock = await manager.get_lock(uid)
+    async with lock:
+        pending_list = manager.user_tasks.pop(uid, [])
+        for item in pending_list:
+            cancelled_tasks.add(str(item.get("task_id")))
+            await safe_delete_task(item["task_id"], uid, bot_client)
+            cleared += 1
+
+        staged_list = manager.staging_pool.pop(uid, [])
+        for data in staged_list:
+            tid_s = str(data.get("task_id"))
+            cancelled_tasks.add(tid_s)
+            if data.get("rkn_processing"):
+                try:
+                    await data["rkn_processing"].delete()
+                except Exception:
+                    pass
+            await remove_path(data.get("ph_path"), data.get("file_path"))
+            shutil.rmtree(f"Renames/{tid_s}", ignore_errors=True)
+            await safe_delete_task(data["task_id"], uid, bot_client)
+            cleared += 1
+
+    # Clear any remaining DB Task records for user
+    db_tasks = await Task.find(Task.user_id == uid).to_list()
+    for t in db_tasks:
+        cancelled_tasks.add(str(t.id))
+        await safe_delete_task(t.id, uid, bot_client)
+        cleared += 1
+
+    if uid in manager.upload_events:
+        manager.upload_events[uid].set()
+
+    return cleared
 
 
 # ==========================================
@@ -289,6 +453,8 @@ manager = QueueManager()
 
 
 async def resume_all_tasks(client):
+    global active_bot_client
+    active_bot_client = client
     print("🔄 Checking for incomplete tasks to resume...")
     try:
         shutil.rmtree("Renames", ignore_errors=True)
@@ -384,14 +550,17 @@ async def resume_all_tasks(client):
 
 @Client.on_message(filters.private & (filters.audio | filters.document | filters.video))
 async def rename_start(client, message):
+    global active_bot_client
+    active_bot_client = client
     user_id = message.from_user.id
 
     if queue_paused and user_id not in _get_admin_ids():
-        return await message.reply_text(
+        notice = maintenance_message.strip() if maintenance_message.strip() else (
             "⏸️ **Qᴜᴇᴜᴇ Pᴀᴜꜱᴇᴅ ꜰᴏʀ Mᴀɪɴᴛᴇɴᴀɴᴄᴇ**\n\n"
             "The server is currently draining active batch tasks before maintenance.\n"
             "Please try sending your files again in a few minutes!"
         )
+        return await message.reply_text(notice)
 
     rkn_file = getattr(message, message.media.value)
 
@@ -404,8 +573,9 @@ async def rename_start(client, message):
     if not is_premium:
         can_upload = await digital_botz.check_daily_limit(user_id, rkn_file.file_size)
         if not can_upload:
-            btn = [[InlineKeyboardButton("💎 Gᴇᴛ PʀᴇᴍɪᴜM", callback_data="premium_plans")]]
-            return await message.reply_text("🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **6GB free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
+            free_limit_str = humanbytes(getattr(Config, "FREE_UPLOAD_LIMIT", 6442450944))
+            btn = [[InlineKeyboardButton("💎 Gᴇᴛ Pʀᴇᴍɪᴜᴍ", callback_data="premium_plans")]]
+            return await message.reply_text(f"🚫 **Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!**\n\nYou have used your **{free_limit_str} free daily limit**.", reply_markup=InlineKeyboardMarkup(btn))
 
     task_id = await digital_botz.add_task(user_id, message.id, 0)
     await manager.add_task(user_id, message, task_id)
@@ -470,16 +640,22 @@ async def download_worker(main_client, user_id):
 
             message = item['msg']
             task_id = item['task_id']
+            tid_str = str(task_id)
 
             worker_client = get_least_busy_worker(main_client)
             current_worker = worker_client
             if worker_client != main_client:
                 worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
 
+            rkn_processing = None
+            log_msg_down = None
+
             try:
+                if tid_str in cancelled_tasks:
+                    raise asyncio.CancelledError("Task cancelled before download")
+
                 await manager.update_status_msg(user_id)
 
-                rkn_processing = None
                 if user_id not in manager.silent_users:
                     try: 
                         rkn_processing = await message.reply_text("⏳ **Pʀᴇᴘᴀʀɪɴɢ...**")
@@ -503,7 +679,7 @@ async def download_worker(main_client, user_id):
 
                 info = renamer.extract_all_info(filename, message.caption or "")
 
-                user_data = await digital_botz.get_user_data(user_id)
+                user_data = await digital_botz.get_user_data(user_id) or {}
                 format_template = user_data.get('format_template', "{filename}")
 
                 # --- The fully formatted name (Retained exactly for Caption) ---
@@ -543,10 +719,11 @@ async def download_worker(main_client, user_id):
                         pass
 
                 dl_path = None
-                log_msg_down = None
                 workers_list = getattr(Config, "WORKER_CLIENTS", [])
 
                 while True:
+                    if tid_str in cancelled_tasks:
+                        raise asyncio.CancelledError("Task cancelled during download")
                     try:
                         if not worker_client.is_connected:
                             try: await worker_client.connect()
@@ -565,7 +742,7 @@ async def download_worker(main_client, user_id):
                                 message=target_msg,
                                 file_name=file_path,
                                 progress=custom_progress,
-                                progress_args=(DOWNLOAD_TEXT, rkn_processing if (user_id not in manager.silent_users) else None, dl_start_time, task_id, new_filename, id(worker_client))
+                                progress_args=(DOWNLOAD_TEXT, rkn_processing if (user_id not in manager.silent_users) else None, dl_start_time, task_id, new_filename, id(worker_client), user_id)
                             ),
                             timeout=7200
                         )
@@ -577,6 +754,9 @@ async def download_worker(main_client, user_id):
 
                         break 
 
+                    except asyncio.CancelledError:
+                        raise
+
                     except asyncio.TimeoutError:
                         if worker_client != main_client and log_msg_down:
                             try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
@@ -586,7 +766,8 @@ async def download_worker(main_client, user_id):
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
                             worker_client = get_least_busy_worker(main_client)
-                            worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
+                            if worker_client != main_client:
+                                worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
                             current_worker = worker_client
                             await asyncio.sleep(2)
                         else:
@@ -614,12 +795,13 @@ async def download_worker(main_client, user_id):
 
                         if isinstance(e, FloodWait):
                             if worker_client != main_client:
+                                record_worker_floodwait(worker_client, e.value, "Download")
                                 worker_client.is_healthy = False
                                 worker_client.unhealthy_until = time.time() + e.value
 
                                 async def heal_worker(w, delay):
                                     await asyncio.sleep(delay)
-                                    if time.time() >= getattr(w, "unhealthy_until", 0):
+                                    if not getattr(w, "is_disabled", False) and time.time() >= getattr(w, "unhealthy_until", 0):
                                         w.is_healthy = True
                                         w.unhealthy_until = 0
                                 asyncio.create_task(heal_worker(worker_client, e.value))
@@ -629,12 +811,16 @@ async def download_worker(main_client, user_id):
                         if len(workers_list) > 1 and worker_client != main_client:
                             worker_loads[worker_client] = max(0, worker_loads.get(worker_client, 0) - 1)
                             worker_client = get_least_busy_worker(main_client)
-                            worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
+                            if worker_client != main_client:
+                                worker_loads[worker_client] = worker_loads.get(worker_client, 0) + 1
                             current_worker = worker_client 
                             await asyncio.sleep(2)
                         else:
                             await asyncio.sleep(wait_time)
                         continue
+
+                if tid_str in cancelled_tasks:
+                    raise asyncio.CancelledError("Task cancelled post-download")
 
                 duration = 0
                 try:
@@ -677,10 +863,25 @@ async def download_worker(main_client, user_id):
                     if user_id in manager.staging_pool:
                         manager.staging_pool[user_id].append(upload_data)
 
+            except asyncio.CancelledError:
+                cancelled_tasks.discard(tid_str)
+                active_progress.pop(tid_str, None)
+                last_ui_update.pop(tid_str, None)
+                if worker_client != main_client and log_msg_down:
+                    try: await main_client.delete_messages(Config.LOG_CHANNEL, log_msg_down.id)
+                    except Exception: pass
+                await safe_delete_task(task_id, user_id, main_client)
+                shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
+                state = manager.batch_state.get(user_id)
+                if state:
+                    state['total_files'] = max(state['processed'], state['total_files'] - 1)
+                    await manager.update_status_msg(user_id)
+                continue
+
             except Exception as inner_e:
                 print(f"Download Error for Task {task_id}: {inner_e}")
-                if str(task_id) in active_progress:
-                    del active_progress[str(task_id)]
+                active_progress.pop(tid_str, None)
+                last_ui_update.pop(tid_str, None)
                 await safe_delete_task(task_id, user_id, main_client)
                 try: 
                     shutil.rmtree(f"Renames/{task_id}", ignore_errors=True)
@@ -764,6 +965,7 @@ async def upload_worker(main_client, user_id):
                             pass
                     break 
 
+                tid_str = str(data['task_id'])
                 rkn_processing = data.get('rkn_processing')
                 if user_id in manager.silent_users:
                     rkn_processing = None
@@ -776,9 +978,14 @@ async def upload_worker(main_client, user_id):
                     worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
 
                 try:
+                    if tid_str in cancelled_tasks:
+                        raise asyncio.CancelledError("Task cancelled before upload")
+
                     workers_list = getattr(Config, "WORKER_CLIENTS", [])
 
                     while True:
+                        if tid_str in cancelled_tasks:
+                            raise asyncio.CancelledError("Task cancelled during upload")
                         try:
                             async def perform_upload():
                                 if not uploader.is_connected:
@@ -788,7 +995,7 @@ async def upload_worker(main_client, user_id):
                                 if not is_main_bot:
                                     filw, error = await upload_files(
                                         uploader, Config.LOG_CHANNEL, data['upload_type'], data['file_path'], 
-                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id']
+                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id'], user_id
                                     )
                                     if not error and filw:
                                         await asyncio.sleep(1.5)
@@ -820,7 +1027,7 @@ async def upload_worker(main_client, user_id):
                                 else:
                                     filw, error = await upload_files(
                                         main_client, user_id, data['upload_type'], data['file_path'], 
-                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id']
+                                        data['ph_path'], data['caption'], data['duration'], rkn_processing if user_id not in manager.silent_users else None, data['new_filename'], data['task_id'], user_id
                                     )
                                     return error
 
@@ -863,12 +1070,13 @@ async def upload_worker(main_client, user_id):
                                             rkn_processing = None
 
                                     if uploader != app and not is_main_bot:
+                                        record_worker_floodwait(uploader, wait_time, "Upload")
                                         uploader.is_healthy = False
                                         uploader.unhealthy_until = time.time() + wait_time
 
                                         async def heal_worker(w, delay):
                                             await asyncio.sleep(delay)
-                                            if time.time() >= getattr(w, "unhealthy_until", 0):
+                                            if not getattr(w, "is_disabled", False) and time.time() >= getattr(w, "unhealthy_until", 0):
                                                 w.is_healthy = True
                                                 w.unhealthy_until = 0
                                         asyncio.create_task(heal_worker(uploader, wait_time))
@@ -878,7 +1086,8 @@ async def upload_worker(main_client, user_id):
                                 if uploader != app and len(workers_list) > 1 and not is_main_bot:
                                     worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                     uploader = get_least_busy_worker(main_client)
-                                    worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
+                                    if uploader != main_client and uploader != app:
+                                        worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
                                     is_main_bot = (uploader == main_client)
                                     await asyncio.sleep(2)
                                     continue
@@ -905,11 +1114,15 @@ async def upload_worker(main_client, user_id):
                                         pass
                                 break
 
+                        except asyncio.CancelledError:
+                            raise
+
                         except asyncio.TimeoutError:
                             if uploader != app and len(workers_list) > 1 and not is_main_bot:
                                 worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
                                 uploader = get_least_busy_worker(main_client)
-                                worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
+                                if uploader != main_client and uploader != app:
+                                    worker_loads[uploader] = worker_loads.get(uploader, 0) + 1
                                 is_main_bot = (uploader == main_client)
                                 await asyncio.sleep(2)
                                 continue
@@ -926,12 +1139,13 @@ async def upload_worker(main_client, user_id):
                         except Exception as perform_e:
                             if isinstance(perform_e, FloodWait):
                                 if uploader != app and not is_main_bot:
+                                    record_worker_floodwait(uploader, perform_e.value, "Upload")
                                     uploader.is_healthy = False
                                     uploader.unhealthy_until = time.time() + perform_e.value
 
                                     async def heal_worker(w, delay):
                                         await asyncio.sleep(delay)
-                                        if time.time() >= getattr(w, "unhealthy_until", 0):
+                                        if not getattr(w, "is_disabled", False) and time.time() >= getattr(w, "unhealthy_until", 0):
                                             w.is_healthy = True
                                             w.unhealthy_until = 0
                                     asyncio.create_task(heal_worker(uploader, perform_e.value))
@@ -944,6 +1158,13 @@ async def upload_worker(main_client, user_id):
                             print(f"Upload loop crash: {perform_e}")
                             break
 
+                except asyncio.CancelledError:
+                    await safe_delete_task(data['task_id'], user_id, main_client)
+                    state = manager.batch_state.get(user_id)
+                    if state:
+                        state['total_files'] = max(state['processed'], state['total_files'] - 1)
+                        await manager.update_status_msg(user_id)
+
                 except Exception as inner_e:
                     print(f"Upload Inner Error: {inner_e}")
                     await safe_delete_task(data['task_id'], user_id, main_client)
@@ -954,11 +1175,9 @@ async def upload_worker(main_client, user_id):
                         await manager.update_status_msg(user_id)
 
                 finally:
-                    if str(data['task_id']) in active_progress:
-                        del active_progress[str(data['task_id'])]
-
-                    if str(data['task_id']) in last_ui_update:
-                        del last_ui_update[str(data['task_id'])]
+                    cancelled_tasks.discard(tid_str)
+                    active_progress.pop(tid_str, None)
+                    last_ui_update.pop(tid_str, None)
 
                     if uploader != main_client and uploader != app:
                         worker_loads[uploader] = max(0, worker_loads.get(uploader, 0) - 1)
@@ -994,11 +1213,11 @@ async def upload_worker(main_client, user_id):
         manager.cleanup(user_id)
 
 
-async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename, task_id):
+async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption, duration, rkn_processing, new_filename, task_id, user_id=None):
     try:
         up_start_time = time.time()
         active_prog = custom_progress
-        active_args = (UPLOAD_TEXT, rkn_processing, up_start_time, task_id, new_filename, id(bot))
+        active_args = (UPLOAD_TEXT, rkn_processing, up_start_time, task_id, new_filename, id(bot), user_id)
 
         if upload_type == "document":
             filw = await asyncio.wait_for(bot.send_document(sender_id, document=file_path, file_name=new_filename, thumb=ph_path, caption=caption, progress=active_prog, progress_args=active_args), timeout=7200)
@@ -1007,6 +1226,8 @@ async def upload_files(bot, sender_id, upload_type, file_path, ph_path, caption,
         elif upload_type == "audio":
             filw = await asyncio.wait_for(bot.send_audio(sender_id, audio=file_path, file_name=new_filename, caption=caption, thumb=ph_path, duration=duration, progress=active_prog, progress_args=active_args), timeout=7200)
         return filw, None
+    except asyncio.CancelledError:
+        raise
     except asyncio.TimeoutError:
         return None, "TIMEOUT: Upload connection froze and was gracefully aborted."
     except FloodWait as fw:
